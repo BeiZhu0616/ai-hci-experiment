@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import time
+import random
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. 配置与项目库 ---
@@ -21,11 +22,12 @@ PROJECT_POOL = {
 }
 
 # --- 2. 状态初始化 ---
-for key in ['step', 'current_idx', 'user_data', 'start_time', 'decisions']:
+for key in ['step', 'current_idx', 'user_data', 'decisions', 'active_projects']:
     if key not in st.session_state:
         if key == 'step': st.session_state.step = "login"
         elif key == 'current_idx': st.session_state.current_idx = 0
         elif key == 'decisions': st.session_state.decisions = []
+        elif key == 'active_projects': st.session_state.active_projects = []
         else: st.session_state[key] = {}
 
 # --- 3. 步骤 1：登录/信息收集 ---
@@ -40,16 +42,21 @@ if st.session_state.step == "login":
         if st.form_submit_button("开始正式实验"):
             if u_id:
                 st.session_state.user_data = {"id": u_id, "role": role, "major": major}
+                
+                # 【学术优化 1：随机打乱项目顺序 Counterbalancing】
+                projects = PROJECT_POOL[role].copy()
+                random.shuffle(projects) # 随机洗牌
+                st.session_state.active_projects = projects
+                
                 st.session_state.step = "experiment"
-                st.session_state.start_time = time.time()
+                st.session_state.page_start_time = time.time() # 记录进入页面的第一秒
                 st.rerun()
             else:
                 st.error("请填写编号后再继续。")
 
 # --- 4. 步骤 2：实验环节（平铺式布局） ---
 elif st.session_state.step == "experiment":
-    role = st.session_state.user_data['role']
-    active_projects = PROJECT_POOL[role]
+    active_projects = st.session_state.active_projects
     idx = st.session_state.current_idx
     
     if idx < len(active_projects):
@@ -66,9 +73,15 @@ elif st.session_state.step == "experiment":
 
         # 4.2 触发 AI 建议
         if ready:
+            # 【学术优化 2：精准记录 AI 暴露时间】
+            if f"ai_reveal_time_{idx}" not in st.session_state:
+                st.session_state[f"ai_reveal_time_{idx}"] = time.time()
+                
             st.divider()
             st.subheader("🤖 Agent 辅助建议")
             st.warning("GreenInvest Agent 正在实时调取全球合规数据库...")
+            
+            # 仅在第一次显示建议时模拟延迟
             if f"waited_{idx}" not in st.session_state:
                 time.sleep(1.5)
                 st.session_state[f"waited_{idx}"] = True
@@ -81,25 +94,35 @@ elif st.session_state.step == "experiment":
                 decision = st.radio("基于以上所有信息，您的选择：", ["建议投资", "不建议投资"], key=f"dec_{idx}", index=None)
                 conf = st.slider("决策信心 (1-10):", 1, 10, 5, key=f"conf_{idx}")
                 
-                elapsed = time.time() - st.session_state.start_time
-                btn_disabled = (elapsed < 5) or (decision is None)
-                btn_label = "提交决策并继续" if elapsed >= 5 else f"请审阅建议 ({int(5-elapsed)}s)"
+                # 强制停留逻辑（从看到 AI 建议开始算 5 秒）
+                elapsed_since_reveal = time.time() - st.session_state[f"ai_reveal_time_{idx}"]
+                btn_disabled = (elapsed_since_reveal < 5) or (decision is None)
+                btn_label = "提交决策并继续" if elapsed_since_reveal >= 5 else f"请审阅建议 ({int(5-elapsed_since_reveal)}s)"
                 
                 if st.button(btn_label, type="primary", disabled=btn_disabled, key=f"btn_{idx}"):
+                    # 计算两个关键时间
+                    final_time = time.time()
+                    total_dwell_time = final_time - st.session_state.page_start_time
+                    ai_reaction_time = final_time - st.session_state[f"ai_reveal_time_{idx}"]
+                    
+                    # 记录这一轮的决策（注意：我们把文本选项转成了更容易做统计的数字 1 和 0）
                     row = {
                         "subject_id": st.session_state.user_data['id'],
                         "role": st.session_state.user_data['role'],
                         "major": st.session_state.user_data['major'],
                         "p_id": p['id'],
                         "is_faulty_ai": p['is_faulty'],
-                        "user_decision": decision,
+                        "user_decision": 1 if decision == "建议投资" else 0, # 数据预处理优化
                         "confidence": conf,
+                        "total_dwell_s": round(total_dwell_time, 2), # 总浏览时间
+                        "ai_reaction_s": round(ai_reaction_time, 2), # 纯看 AI 思考的时间
                         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     st.session_state.decisions.append(row)
                     
+                    # 翻页与重置时钟
                     st.session_state.current_idx += 1
-                    st.session_state.start_time = time.time()
+                    st.session_state.page_start_time = time.time()
                     st.rerun()
     else:
         st.session_state.step = "survey"
@@ -109,35 +132,38 @@ elif st.session_state.step == "experiment":
 elif st.session_state.step == "survey":
     st.title("💡 实验复盘调查")
     with st.form("survey_form"):
-        behavior = st.radio("1. 您是否通过外部搜索引擎（如百度）查阅过资料？", ["从未", "偶尔查阅常识", "深度验证参数/法案"])
-        trust = st.select_slider("2. Agent 建议对您的影响程度：", options=["无影响", "轻微", "中立", "显著", "决定性"])
-        suspicion = st.text_area("3. 是否有发现任何异常之处？")
+        # 同样做了数字编码优化，方便后续跑回归
+        behavior_text = st.radio("1. 您是否通过外部搜索引擎查阅过资料？", ["从未", "偶尔查阅常识", "深度验证参数/法案"])
+        trust_text = st.select_slider("2. Agent 建议对您的影响程度：", options=["无影响", "轻微", "中立", "显著", "决定性"])
+        suspicion = st.text_area("3. 是否有发现任何异常之处？(选填)")
+        
+        # 映射字典
+        behavior_map = {"从未": 0, "偶尔查阅常识": 1, "深度验证参数/法案": 2}
+        trust_map = {"无影响": 1, "轻微": 2, "中立": 3, "显著": 4, "决定性": 5}
 
         if st.form_submit_button("提交反馈并解锁真相"):
-            # 在受试者点提交的这一刻，程序静默连通 Google Sheet
             with st.spinner("正在加密回传数据，请稍候..."):
                 try:
                     conn = st.connection("gsheets", type=GSheetsConnection)
-                    
-                    # 读取已有数据并清理空行
                     try:
                         existing_data = conn.read(worksheet="Sheet1")
                         existing_data = existing_data.dropna(how="all")
                     except:
                         existing_data = pd.DataFrame()
                         
-                    # 拼装带有复盘数据的结果
+                    # 把复盘结果注入到每一条决策记录中
                     for d in st.session_state.decisions:
-                        d.update({"search_behavior": behavior, "trust_level": trust, "feedback": suspicion})
+                        d.update({
+                            "search_behavior": behavior_map[behavior_text], 
+                            "trust_level": trust_map[trust_text], 
+                            "feedback": suspicion
+                        })
                     
                     new_data = pd.DataFrame(st.session_state.decisions)
                     updated_df = pd.concat([existing_data, new_data], ignore_index=True)
                     
-                    # 更新到云端
                     conn.update(worksheet="Sheet1", data=updated_df)
-                    
                 except Exception as e:
-                    # 如果网络波动导致保存失败，给出一个极小的错误提示，但不打断用户流程
                     st.toast("数据同步可能出现延迟，但不影响您的实验进程。", icon="⚠️")
                     print(e)
             
