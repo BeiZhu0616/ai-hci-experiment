@@ -146,7 +146,7 @@ elif st.session_state.step == "survey":
                 try:
                     conn = st.connection("gsheets", type=GSheetsConnection)
                     try:
-                        existing_data = conn.read(worksheet="Sheet1")
+                        existing_data = conn.read(worksheet="Sheet1", ttl=0)
                         existing_data = existing_data.dropna(how="all")
                     except:
                         existing_data = pd.DataFrame()
