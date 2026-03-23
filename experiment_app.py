@@ -54,8 +54,20 @@ for key in ['step', 'current_idx', 'user_data', 'decisions', 'active_projects']:
         else: st.session_state[key] = {}
 
 # --- 3. 步骤 1：登录/信息收集 ---
+# --- 3. 步骤 1：登录/信息收集 ---
 if st.session_state.step == "login":
     st.title("🛡️ 工程决策人机协作实验平台")
+    
+    # 🌟 新增的知情同意说明（使用 st.info 呈现漂亮的蓝色提示框）
+    st.info("""
+    **【科研知情同意说明】**\n
+    欢迎参与本次学术研究！本研究旨在评估“新一代工业大模型（Agentic-AI）在复杂工程决策中的可用性与辅助效果”。\n
+    * **您的任务：** 阅读 2 个模拟的海外工程项目摘要，参考 AI 给出的辅助建议，并做出您的最终投资判断。
+    * **数据保密：** 您的决策数据将完全匿名化处理，仅用于学术统计分析，绝不涉及任何商业机密或个人隐私。
+    * **自愿原则：** 您有权在任何时候中止本次实验。\n
+    **填写下方信息并点击“开始正式实验”按钮，即表示您已知晓上述信息并同意参与。**
+    """)
+    
     st.markdown("---")
     with st.form("user_info_form"):
         u_id = st.text_input("受试者编号/学号 (或昵称)", placeholder="例: 张三 或 SUB-01")
@@ -66,13 +78,13 @@ if st.session_state.step == "login":
             if u_id:
                 st.session_state.user_data = {"id": u_id, "role": role, "major": major}
                 
-                # 【学术优化 1：随机打乱项目顺序 Counterbalancing】
+                # 随机打乱项目顺序 Counterbalancing
                 projects = PROJECT_POOL[role].copy()
-                random.shuffle(projects) # 随机洗牌
+                random.shuffle(projects) 
                 st.session_state.active_projects = projects
                 
                 st.session_state.step = "experiment"
-                st.session_state.page_start_time = time.time() # 记录进入页面的第一秒
+                st.session_state.page_start_time = time.time()
                 st.rerun()
             else:
                 st.error("请填写编号后再继续。")
