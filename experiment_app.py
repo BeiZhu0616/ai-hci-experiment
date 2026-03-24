@@ -5,6 +5,24 @@ import time
 import random
 from streamlit_gsheets import GSheetsConnection
 
+# --- 0. 防敷衍校验函数 (第一道防线) ---
+def check_rationale_quality(text):
+    text = text.strip()
+    if len(text) == 0:
+        return False, "请输入支撑您决策的核心依据。"
+    if len(text) < 5:
+        return False, "字数太少，请详细说明（至少 5 个字）。"
+    if text.isdigit():
+        return False, "请勿输入纯数字，请使用清晰的文字描述。"
+    if len(set(text)) <= 2 and len(text) >= 3:
+        return False, "包含过多重复无意义字符（如 aaaa），请认真填写。"
+    
+    blacklist = ["不知道", "没有", "无", "如题", "同上", "随便", "测试", "没意见", "AI是对的", "同意"]
+    if text in blacklist:
+        return False, "请提供具体的业务或技术依据，避免使用无意义词汇。"
+    
+    return True, ""
+
 # --- 1. 配置与统一项目库 (学术严谨控制变量版) ---
 UNIVERSAL_PROJECTS = [
     {"id": "P1", "title": "埃及 P1 太阳能电站风险审查", 
@@ -50,7 +68,7 @@ if st.session_state.step == "login":
         
         if st.form_submit_button("开始正式实验"):
             if u_id:
-                # 【核心修改】随机分配实验组别 (A/B Test)
+                # 随机分配实验组别 (A/B Test)
                 exp_group = random.choice(["control", "treatment"])
                 st.session_state.user_data = {"id": u_id, "role": role, "major": major, "group": exp_group}
                 
@@ -64,11 +82,10 @@ if st.session_state.step == "login":
             else:
                 st.error("请填写编号后再继续。")
 
-# --- 4. 步骤 2：实验环节（平铺式布局） ---
+# --- 4. 步骤 2：实验环节 ---
 elif st.session_state.step == "experiment":
     active_projects = st.session_state.active_projects
     idx = st.session_state.current_idx
-    # 获取当前受试者的分组
     is_treatment_group = st.session_state.user_data['group'] == "treatment"
     
     if idx < len(active_projects):
@@ -105,15 +122,25 @@ elif st.session_state.step == "experiment":
                 decision = st.radio("综合您的直觉与 Agent 报告，您的选择：", ["建议投资", "不建议投资"], key=f"dec_{idx}", index=None)
                 conf = st.slider("您对此次决策的信心评分 (1-10):", 1, 10, 5, key=f"conf_{idx}")
                 
-                # 【核心修改】A/B 组界面分支渲染
+                # --- 新增：防敷衍拦截逻辑 ---
                 rationale = ""
-                is_rationale_valid = True # 对照组默认有效
+                is_rationale_valid = True 
+                rationale_error_msg = ""
                 
                 if is_treatment_group:
-                    rationale = st.text_input("📝 请简述支撑您做出此决策的1-2个核心依据（必填项，至少3个字）：", key=f"rationale_{idx}", placeholder="例如：合规风险过大 / WACC测算存疑...")
-                    is_rationale_valid = len(rationale.strip()) >= 3
+                    # 使用了具有专业压迫感的文案
+                    rationale = st.text_input("📝 专家复盘记录：请列举支撑您此次决策的核心依据（必填）：", 
+                                              key=f"rationale_{idx}", 
+                                              placeholder="例如：AI忽略了弱电网环境下的设备兼容性风险...")
+                    
+                    if rationale:
+                        is_rationale_valid, rationale_error_msg = check_rationale_quality(rationale)
+                    else:
+                        is_rationale_valid = False
+                        rationale_error_msg = "需填写详实的决策依据后方可提交。"
+                        
                     if not is_rationale_valid and decision is not None:
-                        st.caption("⚠️ 需填写简短的决策依据后方可提交。")
+                        st.error(f"⚠️ {rationale_error_msg}") # 用红框强警示
                 
                 elapsed_since_reveal = time.time() - st.session_state[f"ai_reveal_time_{idx}"]
                 btn_disabled = (elapsed_since_reveal < 5) or (decision is None) or not is_rationale_valid
@@ -128,12 +155,12 @@ elif st.session_state.step == "experiment":
                         "subject_id": st.session_state.user_data['id'],
                         "role": st.session_state.user_data['role'],
                         "major": st.session_state.user_data['major'],
-                        "experiment_group": st.session_state.user_data['group'], # 记录属于哪一组
+                        "experiment_group": st.session_state.user_data['group'],
                         "p_id": p['id'],
                         "is_faulty_ai": p['is_faulty'],
                         "user_decision": 1 if decision == "建议投资" else 0,
                         "confidence": conf,
-                        "rationale_text": rationale if is_treatment_group else "N/A", # 对照组存N/A
+                        "rationale_text": rationale if is_treatment_group else "N/A",
                         "total_dwell_s": round(total_dwell_time, 2),
                         "ai_reaction_s": round(ai_reaction_time, 2),
                         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
