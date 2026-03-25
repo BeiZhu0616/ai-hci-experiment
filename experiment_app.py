@@ -5,25 +5,28 @@ import time
 import random
 from streamlit_gsheets import GSheetsConnection
 
-# --- 0. 防敷衍校验函数 ---
+# --- 0. 防敷衍与防乱填校验函数 ---
 def check_rationale_quality(text):
     text = text.strip()
-    if len(text) == 0:
-        return False, "请输入支撑您研判的核心依据。"
-    if len(text) < 5:
-        return False, "字数太少，请详细说明（至少 5 个字）。"
-    if text.isdigit():
-        return False, "请勿输入纯数字，请使用清晰的文字描述。"
-    if len(set(text)) <= 2 and len(text) >= 3:
-        return False, "包含过多重复无意义字符，请认真填写。"
+    if len(text) == 0: return False, "请输入支撑您研判的核心依据。"
+    if len(text) < 5: return False, "字数太少，请详细说明（至少 5 个字）。"
+    if text.isdigit(): return False, "请勿输入纯数字，请使用清晰的文字描述。"
+    if len(set(text)) <= 2 and len(text) >= 3: return False, "包含过多重复无意义字符，请认真填写。"
     
     blacklist = ["不知道", "没有", "无", "如题", "同上", "随便", "测试", "没意见", "AI是对的", "同意", "信息不足", "11111"]
-    if text in blacklist:
-        return False, "请提供具体的业务或技术依据，避免使用无意义词汇。"
-    
+    if any(word in text for word in blacklist): return False, "请提供具体的业务或技术依据，避免使用无意义词汇。"
     return True, ""
 
-# --- 1. 配置与统一项目库 (静水流深商务排版) ---
+def check_demographics(org, dept, pos):
+    for field_name, value in [("企业/学校", org), ("部门/专业", dept), ("职位/年级", pos)]:
+        val = value.strip()
+        if len(val) < 2: return False, f"[{field_name}] 信息过短，请填写真实全称。"
+        if val.isdigit(): return False, f"[{field_name}] 请勿输入纯数字。"
+        if len(set(val)) <= 1: return False, f"[{field_name}] 含有无效重复字符。"
+        if val in ["不知道", "测试", "无", "随便", "111"]: return False, f"[{field_name}] 请填写有效信息。"
+    return True, ""
+
+# --- 1. 配置与统一项目库 ---
 UNIVERSAL_PROJECTS = [
     {"id": "P1", "title": "埃及 P1 太阳能电站项目初筛", 
      "detail": "**🎯 【核心商业目标】**\n* 评估出海中东的绿地资产，要求财务模型绝对闭环，追求无风险的长期稳健收益。\n\n**📍 【项目规模与核心协议】**\n* 埃及 100兆瓦(MW) 光伏电站。\n* **购电协议(PPA)：**已与信用评级良好的承购方锁定 25 年，电费按美元(USD)计价并直接离岸结算。\n\n**💰 【核心财务指标】**\n* 全投资内部收益率(IRR)测算为 12.8%，现金流极其稳定。\n\n**⏳ 【当前决策】**\n* 基础商业模式清晰。现需针对该区域特定的宏观财务风险进行研判，决定是否推进深度尽调。",
@@ -47,7 +50,7 @@ for key in ['step', 'current_idx', 'user_data', 'decisions', 'active_projects']:
         elif key == 'active_projects': st.session_state.active_projects = []
         else: st.session_state[key] = {}
 
-# --- 3. 步骤 1：第一页 (强制倒计时 + 初筛场景降压) ---
+# --- 3. 步骤 1：第一页 (沙盘说明) ---
 if st.session_state.step == "intro":
     if 'intro_start_time' not in st.session_state:
         st.session_state.intro_start_time = time.time()
@@ -56,32 +59,29 @@ if st.session_state.step == "intro":
     
     st.info("""
     **【🌍 沙盘核心规则说明】**\n
-    欢迎参与本次商业决策沙盘！本研究旨在评估人类在面对“Agentic-AI”进行早期项目研判时的交互模式。\n
+    欢迎参与本次商业决策演练！本研究旨在评估人类在面对“Agentic-AI”进行早期项目研判时的交互模式。\n
     * 💼 **您的角色：** 战略投资部高级研判官。
-    * 🎯 **沙盘情境：** 快速初筛海外项目摘要（Teaser）。借助 AI 助手，在 3-5 分钟内快速识别致命风险。
+    * 🎯 **沙盘情境：** 快速初筛海外项目摘要。借助 AI 助手，在极短时间内识别致命风险。
     * ⏱️ **决策方式：** 决定是将项目**【推进深度尽调】**还是**【直接否决 (Pass)】**。
-    * ⚠️ **核心要求：请完全 :red[凭直觉与现有信息] 快速研判！不要过度纠结于底稿细节，初筛阶段没有绝对的标准答案。**\n
     """)
     
     elapsed_intro = time.time() - st.session_state.intro_start_time
-    wait_time = 5 
-    
-    if elapsed_intro < wait_time:
-        st.button(f"请仔细阅读沙盘规则，准备进入 ({int(wait_time - elapsed_intro)}s)", disabled=True, use_container_width=True)
+    if elapsed_intro < 3:
+        st.button(f"请阅读规则 ({int(3 - elapsed_intro)}s)", disabled=True, use_container_width=True)
         time.sleep(1) 
         st.rerun()
     else:
-        if st.button("我已了解规则，进入身份登记", type="primary", use_container_width=True):
+        if st.button("我已了解，进入身份登记", type="primary", use_container_width=True):
             st.session_state.step = "login"
             st.rerun()
 
-# --- 4. 步骤 2：第二页 (受试者通用信息登记) ---
+# --- 4. 步骤 2：第二页 (受试者通用信息登记 + 强校验) ---
 elif st.session_state.step == "login":
     st.title("📋 受试者基本信息登记")
-    st.caption("为保证学术数据的严谨性，请如实填写（数据严格保密，仅用于群体对比统计）。")
+    st.caption("您的专业背景对本研究至关重要，请务必如实填写（身份数据严格保密）。")
     
     with st.form("user_info_form"):
-        u_id = st.text_input("受试者代号/姓名 (必填，用于系统定位)", placeholder="例: 张三 或 SUB-01")
+        u_id = st.text_input("受试者昵称/学号 (学生请填学号，无需真实姓名)", placeholder="例: SUB-01")
         role = st.selectbox("您的专业身份 (必填)", ["学生", "老师", "企业从业人员"])
         organization = st.text_input("所属企业 / 学校 (必填)", placeholder="例: 某大型新能源企业 / 某大学")
         department = st.text_input("所属部门 / 专业 (必填)", placeholder="例: 战略投资部 / 金融数学")
@@ -93,13 +93,18 @@ elif st.session_state.step == "login":
         with col2:
             birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1995, step=1)
             
-        if st.form_submit_button("保存信息并开启初筛挑战", type="primary"):
-            if u_id and organization and department and position:
+        if st.form_submit_button("保存信息并进入沙盘", type="primary"):
+            # 【核心修改】：在此处执行乱填校验拦截
+            is_valid, error_msg = check_demographics(organization, department, position)
+            
+            if not is_valid:
+                st.error(f"⚠️ 信息填写不规范：{error_msg}")
+            else:
                 exp_group = random.choice(["control", "treatment"])
                 st.session_state.user_data = {
-                    "id": u_id, "role": role, "organization": organization, 
-                    "department": department, "position": position, 
-                    "gender": gender, "birth_year": birth_year,
+                    "id": u_id if u_id else "Anonymous", "role": role, 
+                    "organization": organization, "department": department, 
+                    "position": position, "gender": gender, "birth_year": birth_year,
                     "group": exp_group
                 }
                 
@@ -107,13 +112,39 @@ elif st.session_state.step == "login":
                 random.shuffle(projects) 
                 st.session_state.active_projects = projects
                 
-                st.session_state.step = "experiment"
-                st.session_state.page_start_time = time.time()
+                # 跳转到新增的“强洗脑隔离页”
+                st.session_state.step = "pre_task_briefing"
                 st.rerun()
-            else:
-                st.error("请将基本信息填写完整后再继续。")
 
-# --- 5. 步骤 3：第三页起 (实验环节 + 初筛话术封印) ---
+# --- 5. 步骤 3：全新隔离页 (实验前强洗脑铁律) ---
+elif st.session_state.step == "pre_task_briefing":
+    if 'briefing_start_time' not in st.session_state:
+        st.session_state.briefing_start_time = time.time()
+        
+    st.title("🚨 演练前：核心铁律确认")
+    
+    st.error("""
+    真实的投资初筛往往发生在**【信息不对称】**与**【时间紧迫】**的高压之下。为了达到本次沙盘的真实测试目的，请您在接下来的业务处理中，**务必遵守以下两大铁律**：\n
+    **1. 🧠 绝对凭直觉，禁止“外脑”求助：** 请完全依赖您的已有知识储备与商业直觉做判断，**绝对禁止**使用外部搜索引擎去查证特定的宏观法案或参数。\n
+    **2. 🚫 接受既定事实，禁止“挑刺”退缩：** 请强制假定屏幕上给出的信息**已绝对真实且无法补充**。如果您选择“直接否决(Pass)”该项目，理由只能是因为您发现了**致命的业务风险**，而**绝不能**是因为“我觉得这点信息不够做判断”。
+    """)
+    
+    st.warning("明确这两点，是本商业沙盘成立的唯一基石。请确认您已完全理解。")
+    
+    elapsed_briefing = time.time() - st.session_state.briefing_start_time
+    wait_time = 5 # 强制锁定 5 秒
+    
+    if elapsed_briefing < wait_time:
+        st.button(f"我正在仔细阅读 ({int(wait_time - elapsed_briefing)}s)", disabled=True, use_container_width=True)
+        time.sleep(1) 
+        st.rerun()
+    else:
+        if st.button("我已彻底明白，立即开启项目评审", type="primary", use_container_width=True):
+            st.session_state.step = "experiment"
+            st.session_state.page_start_time = time.time()
+            st.rerun()
+
+# --- 6. 步骤 4：实验环节 (干净整洁，不再提示繁琐规则) ---
 elif st.session_state.step == "experiment":
     active_projects = st.session_state.active_projects
     idx = st.session_state.current_idx
@@ -125,18 +156,12 @@ elif st.session_state.step == "experiment":
         st.progress((idx + 1) / len(active_projects))
         st.header(f"项目: {p['title']}")
         
-        st.error("""
-        **:red[🚨 【初筛决策前提】：]**\n
-        请您强制假定：目前展示的即为项目方提供的**全部初始信息**。\n
-        您的唯一任务，是仅针对下方给出的【初步信息】与【AI风险提示】，完全 :red[凭直觉] 决定该项目是否值得进入下一阶段。请勿以“需要更多尽调数据”为由拒绝决策。
-        """)
-        
         with st.container(border=True):
             st.info(p['detail'])
             with st.expander("📂 点击展开：底层初步尽调参数 (供查阅)"):
                 st.markdown(p['raw_data'])
                 
-            ready = st.checkbox("我已审阅完毕，申请 Agent 介入进行风险测算", key=f"ready_{idx}")
+            ready = st.checkbox("我已初步审阅，申请 Agent 介入辅助研判", key=f"ready_{idx}")
 
         if ready:
             if f"ai_reveal_time_{idx}" not in st.session_state:
@@ -154,7 +179,6 @@ elif st.session_state.step == "experiment":
             
             with st.container(border=True):
                 st.subheader("您的最终研判结论")
-                # 按钮话术软化，降低防卫机制
                 decision = st.radio("综合您的直觉与 Agent 报告，您的选择：", 
                                     ["进入下一轮深度尽调", "风险过大，直接否决 (Pass)"], 
                                     key=f"dec_{idx}", index=None)
@@ -198,7 +222,7 @@ elif st.session_state.step == "experiment":
                         "experiment_group": st.session_state.user_data['group'],
                         "p_id": p['id'],
                         "is_faulty_ai": p['is_faulty'],
-                        "user_decision": 1 if decision == "进入下一轮深度尽调" else 0, # 1代表进尽调(投资)，0代表否决
+                        "user_decision": 1 if decision == "进入下一轮深度尽调" else 0,
                         "confidence": conf,
                         "rationale_text": rationale if is_treatment_group else "N/A",
                         "total_dwell_s": round(total_dwell_time, 2),
@@ -214,7 +238,7 @@ elif st.session_state.step == "experiment":
         st.session_state.step = "survey"
         st.rerun()
 
-# --- 6. 步骤 4：复盘调研与云端自动保存 ---
+# --- 7. 步骤 5：复盘调研与云端自动保存 ---
 elif st.session_state.step == "survey":
     st.title("💡 实验复盘与知识储备核对")
     st.caption("最后一步：为了学术统计的严谨性，我们需要了解您在本次沙盘前的【先验知识储备】。请如实自评。")
@@ -272,7 +296,7 @@ elif st.session_state.step == "survey":
             st.session_state.step = "debrief"
             st.rerun()
 
-# --- 7. 步骤 5：真相告知 ---
+# --- 8. 步骤 6：真相告知 ---
 elif st.session_state.step == "debrief":
     st.balloons()
     st.title("🎉 沙盘演练已完成，非常感谢您的参与！")
