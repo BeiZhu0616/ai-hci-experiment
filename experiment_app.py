@@ -26,7 +26,7 @@ def check_demographics(org, dept, pos):
         if val in ["不知道", "测试", "无", "随便", "111"]: return False, f"[{field_name}] 请填写有效信息。"
     return True, ""
 
-# --- 1. 配置与统一项目库 ---
+# --- 1. 配置与统一项目库 (静水流深商务排版) ---
 UNIVERSAL_PROJECTS = [
     {"id": "P1", "title": "埃及 P1 太阳能电站项目初筛", 
      "detail": "**🎯 【核心商业目标】**\n* 评估出海中东的绿地资产，要求财务模型绝对闭环，追求无风险的长期稳健收益。\n\n**📍 【项目规模与核心协议】**\n* 埃及 100兆瓦(MW) 光伏电站。\n* **购电协议(PPA)：**已与信用评级良好的承购方锁定 25 年，电费按美元(USD)计价并直接离岸结算。\n\n**💰 【核心财务指标】**\n* 全投资内部收益率(IRR)测算为 12.8%，现金流极其稳定。\n\n**⏳ 【当前决策】**\n* 基础商业模式清晰。现需针对该区域特定的宏观财务风险进行研判，决定是否推进深度尽调。",
@@ -75,13 +75,13 @@ if st.session_state.step == "intro":
             st.session_state.step = "login"
             st.rerun()
 
-# --- 4. 步骤 2：第二页 (受试者通用信息登记 + 强校验) ---
+# --- 4. 步骤 2：第二页 (信息登记 + 强校验) ---
 elif st.session_state.step == "login":
     st.title("📋 受试者基本信息登记")
     st.caption("您的专业背景对本研究至关重要，请务必如实填写（身份数据严格保密）。")
     
     with st.form("user_info_form"):
-        u_id = st.text_input("受试者昵称/学号 (学生请填学号，无需真实姓名)", placeholder="例: SUB-01")
+        u_id = st.text_input("受试者代号/昵称 (无需真实姓名)", placeholder="例: SUB-01")
         role = st.selectbox("您的专业身份 (必填)", ["学生", "老师", "企业从业人员"])
         organization = st.text_input("所属企业 / 学校 (必填)", placeholder="例: 某大型新能源企业 / 某大学")
         department = st.text_input("所属部门 / 专业 (必填)", placeholder="例: 战略投资部 / 金融数学")
@@ -94,7 +94,6 @@ elif st.session_state.step == "login":
             birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1995, step=1)
             
         if st.form_submit_button("保存信息并进入沙盘", type="primary"):
-            # 【核心修改】：在此处执行乱填校验拦截
             is_valid, error_msg = check_demographics(organization, department, position)
             
             if not is_valid:
@@ -112,7 +111,6 @@ elif st.session_state.step == "login":
                 random.shuffle(projects) 
                 st.session_state.active_projects = projects
                 
-                # 跳转到新增的“强洗脑隔离页”
                 st.session_state.step = "pre_task_briefing"
                 st.rerun()
 
@@ -144,7 +142,7 @@ elif st.session_state.step == "pre_task_briefing":
             st.session_state.page_start_time = time.time()
             st.rerun()
 
-# --- 6. 步骤 4：实验环节 (干净整洁，不再提示繁琐规则) ---
+# --- 6. 步骤 4：实验环节 (植入微观交互黑匣子) ---
 elif st.session_state.step == "experiment":
     active_projects = st.session_state.active_projects
     idx = st.session_state.current_idx
@@ -156,6 +154,21 @@ elif st.session_state.step == "experiment":
         st.progress((idx + 1) / len(active_projects))
         st.header(f"项目: {p['title']}")
         
+        # 【黑匣子初始化】
+        if f"tracker_init_{idx}" not in st.session_state:
+            st.session_state[f"first_decision_time_{idx}"] = None
+            st.session_state[f"last_recorded_dec_{idx}"] = None
+            st.session_state[f"decision_change_count_{idx}"] = 0
+            st.session_state[f"validation_block_count_{idx}"] = 0
+            st.session_state[f"action_log_{idx}"] = []
+            st.session_state[f"tracker_init_{idx}"] = True
+            
+        st.error("""
+        **:red[🚨 【初筛决策前提】：]**\n
+        请您强制假定：目前展示的即为项目方提供的**全部初始信息**。\n
+        您的唯一任务，是仅针对下方给出的【初步信息】与【AI风险提示】，完全 :red[凭直觉] 决定该项目是否值得进入下一阶段。请勿以“需要更多尽调数据”为由拒绝决策。
+        """)
+        
         with st.container(border=True):
             st.info(p['detail'])
             with st.expander("📂 点击展开：底层初步尽调参数 (供查阅)"):
@@ -166,6 +179,7 @@ elif st.session_state.step == "experiment":
         if ready:
             if f"ai_reveal_time_{idx}" not in st.session_state:
                 st.session_state[f"ai_reveal_time_{idx}"] = time.time()
+                st.session_state[f"action_log_{idx}"].append("[0.0s] 呼叫AI")
                 
             st.divider()
             st.subheader("🤖 Agent 全局初筛报告")
@@ -179,9 +193,25 @@ elif st.session_state.step == "experiment":
             
             with st.container(border=True):
                 st.subheader("您的最终研判结论")
+                
                 decision = st.radio("综合您的直觉与 Agent 报告，您的选择：", 
                                     ["进入下一轮深度尽调", "风险过大，直接否决 (Pass)"], 
                                     key=f"dec_{idx}", index=None)
+                
+                # 【黑匣子记录 1：选项摇摆与首次思考时间】
+                current_time_offset = round(time.time() - st.session_state[f"ai_reveal_time_{idx}"], 1)
+                if decision is not None:
+                    if st.session_state[f"first_decision_time_{idx}"] is None:
+                        st.session_state[f"first_decision_time_{idx}"] = time.time()
+                        st.session_state[f"action_log_{idx}"].append(f"[{current_time_offset}s] 首次选择:{decision[:4]}")
+                    
+                    last_dec = st.session_state[f"last_recorded_dec_{idx}"]
+                    if last_dec is not None and decision != last_dec:
+                        st.session_state[f"decision_change_count_{idx}"] += 1
+                        st.session_state[f"action_log_{idx}"].append(f"[{current_time_offset}s] 改选:{decision[:4]}")
+                    
+                    st.session_state[f"last_recorded_dec_{idx}"] = decision
+                
                 conf = st.slider("您对此次初筛结论的信心评分 (1-10):", 1, 10, 5, key=f"conf_{idx}")
                 
                 rationale = ""
@@ -199,41 +229,55 @@ elif st.session_state.step == "experiment":
                         is_rationale_valid = False
                         rationale_error_msg = "需填写详实的决策依据后方可提交。"
                         
-                    if not is_rationale_valid and decision is not None:
-                        st.error(f"⚠️ {rationale_error_msg}")
-                
                 elapsed_since_reveal = time.time() - st.session_state[f"ai_reveal_time_{idx}"]
-                btn_disabled = (elapsed_since_reveal < 5) or (decision is None) or not is_rationale_valid
+                btn_disabled = (elapsed_since_reveal < 5) or (decision is None)
                 btn_label = "提交决策并继续" if elapsed_since_reveal >= 5 else f"请审阅报告 ({int(5-elapsed_since_reveal)}s)"
                 
                 if st.button(btn_label, type="primary", disabled=btn_disabled, key=f"btn_{idx}"):
-                    final_time = time.time()
-                    total_dwell_time = final_time - st.session_state.page_start_time
-                    ai_reaction_time = final_time - st.session_state[f"ai_reveal_time_{idx}"]
                     
-                    row = {
-                        "subject_id": st.session_state.user_data['id'],
-                        "role": st.session_state.user_data['role'],
-                        "organization": st.session_state.user_data['organization'],
-                        "department": st.session_state.user_data['department'],
-                        "position": st.session_state.user_data['position'],
-                        "gender": st.session_state.user_data['gender'],
-                        "birth_year": st.session_state.user_data['birth_year'],
-                        "experiment_group": st.session_state.user_data['group'],
-                        "p_id": p['id'],
-                        "is_faulty_ai": p['is_faulty'],
-                        "user_decision": 1 if decision == "进入下一轮深度尽调" else 0,
-                        "confidence": conf,
-                        "rationale_text": rationale if is_treatment_group else "N/A",
-                        "total_dwell_s": round(total_dwell_time, 2),
-                        "ai_reaction_s": round(ai_reaction_time, 2),
-                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    st.session_state.decisions.append(row)
-                    
-                    st.session_state.current_idx += 1
-                    st.session_state.page_start_time = time.time()
-                    st.rerun()
+                    # 【黑匣子记录 2：瞎填拦截记录】
+                    if is_treatment_group and not is_rationale_valid:
+                        st.session_state[f"validation_block_count_{idx}"] += 1
+                        st.session_state[f"action_log_{idx}"].append(f"[{current_time_offset}s] 提交被拦:{rationale_error_msg[:4]}")
+                        st.error(f"⚠️ {rationale_error_msg}")
+                    else:
+                        final_time = time.time()
+                        total_dwell_time = final_time - st.session_state.page_start_time
+                        
+                        first_dec_time = st.session_state.get(f"first_decision_time_{idx}", final_time)
+                        pure_think_time = first_dec_time - st.session_state[f"ai_reveal_time_{idx}"]
+                        total_reaction_time = final_time - st.session_state[f"ai_reveal_time_{idx}"]
+                        
+                        st.session_state[f"action_log_{idx}"].append(f"[{current_time_offset}s] 成功提交")
+                        final_log_str = " -> ".join(st.session_state[f"action_log_{idx}"])
+                        
+                        row = {
+                            "subject_id": st.session_state.user_data['id'],
+                            "role": st.session_state.user_data['role'],
+                            "organization": st.session_state.user_data['organization'],
+                            "department": st.session_state.user_data['department'],
+                            "position": st.session_state.user_data['position'],
+                            "gender": st.session_state.user_data['gender'],
+                            "birth_year": st.session_state.user_data['birth_year'],
+                            "experiment_group": st.session_state.user_data['group'],
+                            "p_id": p['id'],
+                            "is_faulty_ai": p['is_faulty'],
+                            "user_decision": 1 if decision == "进入下一轮深度尽调" else 0,
+                            "confidence": conf,
+                            "rationale_text": rationale if is_treatment_group else "N/A",
+                            "total_dwell_s": round(total_dwell_time, 2),
+                            "pure_think_s": round(pure_think_time, 2),
+                            "total_reaction_s": round(total_reaction_time, 2),
+                            "change_count": st.session_state[f"decision_change_count_{idx}"],
+                            "block_count": st.session_state[f"validation_block_count_{idx}"],
+                            "action_log": final_log_str,
+                            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        st.session_state.decisions.append(row)
+                        
+                        st.session_state.current_idx += 1
+                        st.session_state.page_start_time = time.time()
+                        st.rerun()
     else:
         st.session_state.step = "survey"
         st.rerun()
