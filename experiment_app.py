@@ -15,9 +15,9 @@ def check_rationale_quality(text):
     if text.isdigit():
         return False, "请勿输入纯数字，请使用清晰的文字描述。"
     if len(set(text)) <= 2 and len(text) >= 3:
-        return False, "包含过多重复无意义字符（如 aaaa），请认真填写。"
+        return False, "包含过多重复无意义字符，请认真填写。"
     
-    blacklist = ["不知道", "没有", "无", "如题", "同上", "随便", "测试", "没意见", "AI是对的", "同意", "11111"]
+    blacklist = ["不知道", "没有", "无", "如题", "同上", "随便", "测试", "没意见", "AI是对的", "同意", "11111", "信息不足"]
     if text in blacklist:
         return False, "请提供具体的业务或技术依据，避免使用无意义词汇。"
     
@@ -26,7 +26,7 @@ def check_rationale_quality(text):
 # --- 1. 配置与统一项目库 ---
 UNIVERSAL_PROJECTS = [
     {"id": "P1", "title": "埃及 P1 太阳能电站风险审查", 
-     "detail": "**🎯 【核心商业目标】**\n* 作为集团出海中东的桥头堡资产，要求财务模型绝对闭环，追求无风险的长期稳健收益。\n\n**📍 【项目选址与规模】**\n* 埃及沙姆沙伊赫（红海沿岸）100兆瓦(MW)光伏电站。\n\n**💰 【核心财务指标】**\n* 全投资内部收益率(IRR)测算为 **12.8%**，综合度电成本极具竞争力。\n\n**📜 【核心政策红利】**\n* 财务模型高度依赖《2024埃及绿色能源法案》。法案明确规定：**红海沿岸**新能源特许开发区可享受 **15 年免税**。\n\n**⏳ 【当前进展】**\n* 常规商业尽调已完毕（无异常），工程总包方已就位。现等待投委会针对环保合规风险进行最终过会。",
+     "detail": "**🎯 【核心商业目标】**\n* 评估出海中东的绿地资产，要求财务模型绝对闭环，追求无风险的长期稳健收益。\n\n**📍 【项目选址与规模】**\n* 埃及沙姆沙伊赫（红海沿岸）100兆瓦(MW)光伏电站。\n\n**💰 【核心财务指标】**\n* 全投资内部收益率(IRR)测算为 **12.8%**，综合度电成本极具竞争力。\n\n**📜 【核心政策红利】**\n* 财务模型高度依赖《2024埃及绿色能源法案》。法案明确规定：**红海沿岸**新能源特许开发区可享受 **15 年免税**。\n\n**⏳ 【当前进展】**\n* 常规商业尽调已完毕（无异常），工程总包方已就位。现等待针对“环保合规风险”进行最终定夺。",
      "raw_data": "▶ **财务假设：** 综合资金成本 6.5%，通胀率 2.5%。\n▶ **地勘坐标：** 项目中心点为 N27°54', E34°19'（沙姆沙伊赫市郊）。\n▶ **合规要求：** 享受免税需满足 30 年用地合规期追溯审计，最终的环保评估批复仍在走流程。",
      "ai_advice": "**【最终建议】** 🛑 建议否决 / 不建议投资 \n**【系统置信度】** 94.2% (高风险提示)\n\n**【Agent 推理链】**\n1. **坐标核验：** 调用全球地理信息系统(GIS)解析地勘坐标 N27°54', E34°19'。\n2. **政策比对：** 对比埃及环境部生态红线，该坐标落入《尼罗河三角洲候鸟迁徙保护区》缓冲带。\n3. **风险推演：** 保护区缓冲带内项目将被**一票否决**，法案免税红利绝对不适用。财务模型存在致命错误，前期尽调存在严重遗漏。", 
      "is_faulty": True}, 
@@ -41,49 +41,68 @@ UNIVERSAL_PROJECTS = [
 # --- 2. 状态初始化 ---
 for key in ['step', 'current_idx', 'user_data', 'decisions', 'active_projects']:
     if key not in st.session_state:
-        if key == 'step': st.session_state.step = "login"
+        if key == 'step': st.session_state.step = "intro" 
         elif key == 'current_idx': st.session_state.current_idx = 0
         elif key == 'decisions': st.session_state.decisions = []
         elif key == 'active_projects': st.session_state.active_projects = []
         else: st.session_state[key] = {}
 
-# --- 3. 步骤 1：登录/信息收集 (强制倒计时版) ---
-if st.session_state.step == "login":
-    # 记录进入页面的时间戳
-    if 'login_start_time' not in st.session_state:
-        st.session_state.login_start_time = time.time()
+# --- 3. 步骤 1：第一页 (纯享版规则 + 强制倒计时) ---
+if st.session_state.step == "intro":
+    if 'intro_start_time' not in st.session_state:
+        st.session_state.intro_start_time = time.time()
         
-    st.title("🛡️ 工程决策人机协作实验平台")
+    st.title("🛡️ 工程决策人机协作沙盘")
     
     st.info("""
-    **【🌍 欢迎进入商业决策沙盘测试】**\n
-    本研究旨在评估“工业大模型（Agentic-AI）”在复杂商业决策中的辅助效果。\n
-    * 💼 **您的角色：** 您是集团投资委员会（IC）的终审委员。
-    * 🛡️ **【沙盘核心假设】：请假设该项目的常规财务与法务尽调均已“闭环且合规”。您的任务不是重做基础尽调，而是专门针对 AI 抛出的“突发边缘风险”进行最终定夺。**
-    * ⏱️ **任务说明：** 审阅 2 个海外新能源项目，参考 AI 报告做出决策。（预计耗时 3-5 分钟，请完全 **:red[凭直觉]** 判断，没有绝对标准答案）
-    * 🔒 **数据保密：** 您的决策数据将完全匿名化处理，仅用于学术统计。\n
+    **【🌍 沙盘核心规则说明】**\n
+    欢迎参与本次商业决策沙盘！本研究旨在评估人类在使用“Agentic-AI”进行复杂决策时的交互模式。\n
+    * 💼 **您的角色：** 独立项目终审人。
+    * 🎯 **沙盘假定：** 项目的常规财务与法务尽调均已“闭环且合规”。您的任务是专门针对 AI 抛出的“突发边缘风险”进行最终定夺。
+    * ⏱️ **决策方式：** 审阅 2 个海外项目，参考 AI 报告做出决策。（预计耗时 3-5 分钟）
+    * ⚠️ **核心要求：请完全 **:red[凭直觉]** 判断！不要过度纠结于背景细节，这里没有绝对的标准答案。**\n
     """)
     
-    st.markdown("---")
+    elapsed_intro = time.time() - st.session_state.intro_start_time
+    wait_time = 5 # 强制阅读 5 秒
     
-    # 取消 st.form 以支持倒计时动态刷新
-    u_id = st.text_input("受试者代号/昵称 (必填)", placeholder="例: 张三 或 SUB-01")
-    role = st.selectbox("您的专业身份", ["学生", "老师", "企业从业人员"])
-    major = st.text_input("所属专业/部门", placeholder="例: 战略投资部 / 金融数学")
-    
-    # 强制阅读倒计时逻辑 (6秒)
-    elapsed_login = time.time() - st.session_state.login_start_time
-    wait_time = 6 
-    
-    if elapsed_login < wait_time:
-        st.button(f"请先仔细阅读上方沙盘规则 ({int(wait_time - elapsed_login)}s)", disabled=True, use_container_width=True)
-        time.sleep(1) # 停顿1秒后重载页面，形成秒表动画
+    if elapsed_intro < wait_time:
+        st.button(f"请仔细阅读沙盘规则，准备进入 ({int(wait_time - elapsed_intro)}s)", disabled=True, use_container_width=True)
+        time.sleep(1) 
         st.rerun()
     else:
-        if st.button("开始正式实验", type="primary", use_container_width=True):
-            if u_id:
+        if st.button("我已了解规则，进入身份登记", type="primary", use_container_width=True):
+            st.session_state.step = "login"
+            st.rerun()
+
+# --- 4. 步骤 2：第二页 (受试者通用信息登记) ---
+elif st.session_state.step == "login":
+    st.title("📋 受试者基本信息登记")
+    st.caption("为保证学术数据的严谨性，请如实填写（数据严格保密，仅用于群体对比统计）。")
+    
+    with st.form("user_info_form"):
+        u_id = st.text_input("受试者代号/姓名 (必填，用于系统定位)", placeholder="例: 张三 或 SUB-01")
+        role = st.selectbox("您的专业身份 (必填)", ["学生", "老师", "企业从业人员"])
+        organization = st.text_input("所属企业 / 学校 (必填)", placeholder="例: 某大型新能源企业 / 某大学")
+        department = st.text_input("所属部门 / 专业 (必填)", placeholder="例: 战略投资部 / 金融数学")
+        position = st.text_input("当前职位 / 年级 (必填)", placeholder="例: 高级经理 / 大三 / 副教授")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            gender = st.selectbox("性别", ["男", "女", "其他"])
+        with col2:
+            # 放宽至 2010 年，以兼容本科生群体
+            birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1995, step=1)
+            
+        if st.form_submit_button("保存信息并开启沙盘挑战", type="primary"):
+            if u_id and organization and department and position:
                 exp_group = random.choice(["control", "treatment"])
-                st.session_state.user_data = {"id": u_id, "role": role, "major": major, "group": exp_group}
+                st.session_state.user_data = {
+                    "id": u_id, "role": role, "organization": organization, 
+                    "department": department, "position": position, 
+                    "gender": gender, "birth_year": birth_year,
+                    "group": exp_group
+                }
                 
                 projects = UNIVERSAL_PROJECTS.copy()
                 random.shuffle(projects) 
@@ -93,9 +112,9 @@ if st.session_state.step == "login":
                 st.session_state.page_start_time = time.time()
                 st.rerun()
             else:
-                st.error("请填写受试者代号后再继续。")
+                st.error("请将基本信息填写完整后再继续。")
 
-# --- 4. 步骤 2：实验环节 ---
+# --- 5. 步骤 3：第三页起 (实验环节 + 极致话术封印) ---
 elif st.session_state.step == "experiment":
     active_projects = st.session_state.active_projects
     idx = st.session_state.current_idx
@@ -103,16 +122,19 @@ elif st.session_state.step == "experiment":
     
     if idx < len(active_projects):
         p = active_projects[idx]
-        st.caption(f"任务进度: {idx+1} / {len(active_projects)}")
+        st.caption(f"沙盘进度: {idx+1} / {len(active_projects)}")
         st.progress((idx + 1) / len(active_projects))
-        st.header(f"项目 ID: {p['id']} - {p['title']}")
+        st.header(f"项目: {p['title']}")
         
-        # --- 核心新增：每个测式的红字强提醒 ---
-        st.markdown("**:red[🚨 【沙盘规则重申】：非真实投资！常规尽调与其他基础信息均已收集验证完毕，请您直接根据下方给定的信息进行最终投资定夺。]**")
+        # --- 核心新增：专门针对所有人（尤其是从业人员）的话术封印 ---
+        st.error("""
+        **:red[🚨 【终极决策前提 - 请勿剥离语境】：]**\n
+        本项目为高度提纯的虚拟沙盘。**请您强制假定：所有未在此处列出的常规信息（如详细报表、底层数据等）均已由基础团队核实，且绝对无瑕疵！**\n
+        您的唯一任务，是**仅针对下方给出的【突发风险】与【AI建议】，完全 :red[凭直觉] 做出最终定夺。** 请勿以“基础信息不全/无法尽调”为由拒绝决策。
+        """)
         
         with st.container(border=True):
             st.info(p['detail'])
-            
             with st.expander("📂 点击展开：底层尽调数据与参数 (供查阅)"):
                 st.markdown(p['raw_data'])
                 
@@ -142,7 +164,7 @@ elif st.session_state.step == "experiment":
                 rationale_error_msg = ""
                 
                 if is_treatment_group:
-                    rationale = st.text_input("📝 专家复盘记录：请列举支撑您此次决策的核心依据（必填）：", 
+                    rationale = st.text_input("📝 复盘记录：请列举支撑您此次决策的核心依据（必填）：", 
                                               key=f"rationale_{idx}", 
                                               placeholder="例如：AI提示的合规风险过大 / 我认为设备兼容性可以克服...")
                     
@@ -166,8 +188,12 @@ elif st.session_state.step == "experiment":
                     
                     row = {
                         "subject_id": st.session_state.user_data['id'],
-                        "role": st.session_state.user_data['role'],
-                        "major": st.session_state.user_data['major'],
+                        "role": st.session_state.user_data['role'], # 记录身份类别
+                        "organization": st.session_state.user_data['organization'],
+                        "department": st.session_state.user_data['department'],
+                        "position": st.session_state.user_data['position'],
+                        "gender": st.session_state.user_data['gender'],
+                        "birth_year": st.session_state.user_data['birth_year'],
                         "experiment_group": st.session_state.user_data['group'],
                         "p_id": p['id'],
                         "is_faulty_ai": p['is_faulty'],
@@ -187,7 +213,7 @@ elif st.session_state.step == "experiment":
         st.session_state.step = "survey"
         st.rerun()
 
-# --- 5. 步骤 3：复盘调研与云端自动保存 ---
+# --- 6. 步骤 4：复盘调研与云端自动保存 ---
 elif st.session_state.step == "survey":
     st.title("💡 实验复盘调查")
     with st.form("survey_form"):
@@ -226,18 +252,18 @@ elif st.session_state.step == "survey":
             st.session_state.step = "debrief"
             st.rerun()
 
-# --- 6. 步骤 4：真相告知 ---
+# --- 7. 步骤 5：真相告知 ---
 elif st.session_state.step == "debrief":
     st.balloons()
     st.title("🎉 实验已完成，非常感谢您的参与！")
     
     with st.expander("🎓 关于本研究的机密说明 (点击展开)", expanded=True):
         st.write("""
-        本研究旨在评估工程师、高管与学生在面对 Agentic-AI 时的‘信任校准’机制。
-        **为了测试极限情况，部分 AI 建议（如特定法案的冲突或违规预警）是我们故意植入的算法幻觉。**
+        本研究旨在评估各类受试群体在面对 Agentic-AI 时的‘信任校准’机制。
+        **为了测试极限情况，部分 AI 建议（如特定地理位置的冲突预警）是我们故意植入的算法幻觉。**
         
         您的直觉判断和决策依据将对我们探索【可信工业 AI】的治理框架提供极大的帮助。
-        为了不影响后续同事的判断，**请对以上陷阱细节保密**。
+        为了不影响后续受试者的判断，**请对以上陷阱细节保密**。
         """)
     
-    st.success("您的数据已加密上传完毕。现在您可以安全地关闭此窗口了。祝您工作顺利！")
+    st.success("您的数据已加密上传完毕。现在您可以安全地关闭此窗口了。祝您生活愉快！")
