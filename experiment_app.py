@@ -5,7 +5,7 @@ import time
 import random
 from streamlit_gsheets import GSheetsConnection
 
-# --- 0. 防敷衍校验函数 (第一道防线) ---
+# --- 0. 防敷衍校验函数 ---
 def check_rationale_quality(text):
     text = text.strip()
     if len(text) == 0:
@@ -23,16 +23,16 @@ def check_rationale_quality(text):
     
     return True, ""
 
-# --- 1. 配置与统一项目库 (去缩写 + 商业沙盘排版 + 变量严密控制版) ---
+# --- 1. 配置与统一项目库 ---
 UNIVERSAL_PROJECTS = [
     {"id": "P1", "title": "埃及 P1 太阳能电站风险审查", 
-     "detail": "**📍 【项目选址与规模】**\n* 埃及沙姆沙伊赫（红海沿岸）100兆瓦(MW)光伏电站。\n\n**💰 【核心财务指标】**\n* 全投资内部收益率(IRR)测算为 **12.8%**，综合度电成本极具竞争力。\n\n**📜 【核心政策红利】**\n* 财务模型高度依赖《2024埃及绿色能源法案》。\n* 法案明确规定：**红海沿岸**新能源特许开发区可享受 **15 年免税**。\n\n**⏳ 【当前进展】**\n* 第三方律所尽职调查暂未发现重大瑕疵，工程总包方承诺按期交付，正等待投委会过会。",
+     "detail": "**🎯 【核心商业目标】**\n* 作为集团出海中东的桥头堡资产，要求财务模型绝对闭环，追求无风险的长期稳健收益。\n\n**📍 【项目选址与规模】**\n* 埃及沙姆沙伊赫（红海沿岸）100兆瓦(MW)光伏电站。\n\n**💰 【核心财务指标】**\n* 全投资内部收益率(IRR)测算为 **12.8%**，综合度电成本极具竞争力。\n\n**📜 【核心政策红利】**\n* 财务模型高度依赖《2024埃及绿色能源法案》。法案明确规定：**红海沿岸**新能源特许开发区可享受 **15 年免税**。\n\n**⏳ 【当前进展】**\n* 常规商业尽调已完毕（无异常），工程总包方已就位。现等待投委会针对环保合规风险进行最终过会。",
      "raw_data": "▶ **财务假设：** 综合资金成本 6.5%，通胀率 2.5%。\n▶ **地勘坐标：** 项目中心点为 N27°54', E34°19'（沙姆沙伊赫市郊）。\n▶ **合规要求：** 享受免税需满足 30 年用地合规期追溯审计，最终的环保评估批复仍在走流程。",
-     "ai_advice": "**【最终建议】** 🛑 建议否决 / 不建议投资 \n**【系统置信度】** 94.2% (高风险提示)\n\n**【Agent 推理链】**\n1. **坐标核验：** 调用全球地理信息系统(GIS)解析地勘坐标 N27°54', E34°19'。\n2. **政策比对：** 对比埃及环境部生态红线，该坐标落入《尼罗河三角洲候鸟迁徙保护区》缓冲带。\n3. **风险推演：** 保护区缓冲带内项目将被**一票否决**，法案免税红利绝对不适用。财务模型存在致命错误，律所的尽职调查有严重遗漏。", 
+     "ai_advice": "**【最终建议】** 🛑 建议否决 / 不建议投资 \n**【系统置信度】** 94.2% (高风险提示)\n\n**【Agent 推理链】**\n1. **坐标核验：** 调用全球地理信息系统(GIS)解析地勘坐标 N27°54', E34°19'。\n2. **政策比对：** 对比埃及环境部生态红线，该坐标落入《尼罗河三角洲候鸟迁徙保护区》缓冲带。\n3. **风险推演：** 保护区缓冲带内项目将被**一票否决**，法案免税红利绝对不适用。财务模型存在致命错误，前期尽调存在严重遗漏。", 
      "is_faulty": True}, 
     
     {"id": "P2", "title": "阿曼绿氢项目工程与供应链评估", 
-     "detail": "**📍 【项目选址与设备】**\n* 阿曼杜库姆 50兆瓦(MW)风光互补制氢示范工程。\n* 选用欧洲一线品牌的质子交换膜(PEM)新型电解槽，产品符合欧盟严格的绿氢出口标准。\n\n**⚠️ 【风险识别】**\n* **工程端反馈：** 项目处于沙漠边缘的**极弱电网**环境。\n* **商务端反馈：** 欧洲设备属于单一来源采购，交期较长且存在汇率波动风险。\n\n**⏳ 【当前决策】**\n* 设备采购合同待签署，需就是否继续推进该欧洲供应商方案出具终审意见。",
+     "detail": "**🎯 【核心商业目标】**\n* 抢占中东对欧洲绿氢出口先机，要求供应链绝对安全，技术落地必须具备 100% 的工程可行性。\n\n**📍 【项目选址与设备】**\n* 阿曼杜库姆 50兆瓦(MW)风光互补制氢示范工程。\n* 选用欧洲一线品牌的质子交换膜(PEM)新型电解槽，产品符合欧盟严格的绿氢出口标准。\n\n**⚠️ 【突发风险识别】**\n* **工程端反馈：** 项目处于沙漠边缘的**极弱电网**环境。\n* **商务端反馈：** 欧洲设备属于单一来源采购，交期较长且存在汇率波动风险。\n\n**⏳ 【当前决策】**\n* 基础收益率测算已达标。现需就是否无视弱电网风险，强行推进该欧洲供应商方案出具终审意见。",
      "raw_data": "▶ **电网参数：** 前期接入点实测指标极差（短路比仅为1.2），系统抗干扰能力极低。\n▶ **设备特性：** 欧洲设备的内部控制系统封闭，对电网波动极为敏感。\n▶ **备选方案：** 亚洲某厂商报价低 20%，但在欧盟出口认证的材料追溯上存在一定瑕疵。",
      "ai_advice": "**【最终建议】** ⚠️ 建议暂缓签署采购合同\n**【系统置信度】** 88.5% (中高风险提示)\n\n**【Agent 推理链】**\n1. **工况仿真：** 提取“极弱电网(短路比1.2)”参数代入设备控制模型。\n2. **动态响应：** 在该极弱电网环境下，设备的功率耦合极易导致内部控制系统失稳，引发**高频振荡**甚至大规模脱网。\n3. **最终研判：** 欧洲硬件在该极限工况下未经验证。建议**暂停推进**，要求供应商补充深度的电网稳定性仿真报告，并同步接洽亚洲备选供应商。", 
      "is_faulty": False}
@@ -47,28 +47,41 @@ for key in ['step', 'current_idx', 'user_data', 'decisions', 'active_projects']:
         elif key == 'active_projects': st.session_state.active_projects = []
         else: st.session_state[key] = {}
 
-# --- 3. 步骤 1：登录/信息收集 ---
+# --- 3. 步骤 1：登录/信息收集 (强制倒计时版) ---
 if st.session_state.step == "login":
+    # 记录进入页面的时间戳
+    if 'login_start_time' not in st.session_state:
+        st.session_state.login_start_time = time.time()
+        
     st.title("🛡️ 工程决策人机协作实验平台")
     
     st.info("""
     **【🌍 欢迎进入商业决策沙盘测试】**\n
     本研究旨在评估“工业大模型（Agentic-AI）”在复杂商业决策中的辅助效果。\n
-    * 💼 **您的角色：** 假设您是一名**投资委员会成员**。您不需要是工程技术专家，请充分调用您的**商业直觉、常识与逻辑**来进行判断。
-    * ⏱️ **任务说明：** 审阅 2 个海外新能源项目卡片，参考 AI 助手给出的尽调报告，做出您的投资决策。**（全程预计耗时 3-5 分钟）**
-    * 🔒 **数据保密：** 您的决策数据将完全匿名化处理，仅用于学术统计分析，绝不涉及隐私。\n
-    **填写下方信息并点击“开始正式实验”，即刻启动您的决策沙盘。**
+    * 💼 **您的角色：** 您是集团投资委员会（IC）的终审委员。
+    * 🛡️ **【沙盘核心假设】：请假设该项目的常规财务与法务尽调均已“闭环且合规”。您的任务不是重做基础尽调，而是专门针对 AI 抛出的“突发边缘风险”进行最终定夺。**
+    * ⏱️ **任务说明：** 审阅 2 个海外新能源项目，参考 AI 报告做出决策。（预计耗时 3-5 分钟，请完全 **:red[凭直觉]** 判断，没有绝对标准答案）
+    * 🔒 **数据保密：** 您的决策数据将完全匿名化处理，仅用于学术统计。\n
     """)
     
     st.markdown("---")
-    with st.form("user_info_form"):
-        u_id = st.text_input("受试者代号/昵称 (必填)", placeholder="例: 张三 或 SUB-01")
-        role = st.selectbox("您的专业身份", ["学生", "老师", "企业从业人员"])
-        major = st.text_input("所属专业/部门", placeholder="例: 战略投资部 / 金融数学")
-        
-        if st.form_submit_button("开始正式实验"):
+    
+    # 取消 st.form 以支持倒计时动态刷新
+    u_id = st.text_input("受试者代号/昵称 (必填)", placeholder="例: 张三 或 SUB-01")
+    role = st.selectbox("您的专业身份", ["学生", "老师", "企业从业人员"])
+    major = st.text_input("所属专业/部门", placeholder="例: 战略投资部 / 金融数学")
+    
+    # 强制阅读倒计时逻辑 (6秒)
+    elapsed_login = time.time() - st.session_state.login_start_time
+    wait_time = 6 
+    
+    if elapsed_login < wait_time:
+        st.button(f"请先仔细阅读上方沙盘规则 ({int(wait_time - elapsed_login)}s)", disabled=True, use_container_width=True)
+        time.sleep(1) # 停顿1秒后重载页面，形成秒表动画
+        st.rerun()
+    else:
+        if st.button("开始正式实验", type="primary", use_container_width=True):
             if u_id:
-                # 【核心机制】后台静默执行 A/B 测试分组
                 exp_group = random.choice(["control", "treatment"])
                 st.session_state.user_data = {"id": u_id, "role": role, "major": major, "group": exp_group}
                 
@@ -93,6 +106,9 @@ elif st.session_state.step == "experiment":
         st.caption(f"任务进度: {idx+1} / {len(active_projects)}")
         st.progress((idx + 1) / len(active_projects))
         st.header(f"项目 ID: {p['id']} - {p['title']}")
+        
+        # --- 核心新增：每个测式的红字强提醒 ---
+        st.markdown("**:red[🚨 【沙盘规则重申】：非真实投资！常规尽调与其他基础信息均已收集验证完毕，请您直接根据下方给定的信息进行最终投资定夺。]**")
         
         with st.container(border=True):
             st.info(p['detail'])
@@ -121,7 +137,6 @@ elif st.session_state.step == "experiment":
                 decision = st.radio("综合您的直觉与 Agent 报告，您的选择：", ["建议投资", "不建议投资"], key=f"dec_{idx}", index=None)
                 conf = st.slider("您对此次决策的信心评分 (1-10):", 1, 10, 5, key=f"conf_{idx}")
                 
-                # --- A/B 分组呈现逻辑与防敷衍拦截 ---
                 rationale = ""
                 is_rationale_valid = True 
                 rationale_error_msg = ""
@@ -186,7 +201,6 @@ elif st.session_state.step == "survey":
         if st.form_submit_button("提交反馈并解锁真相"):
             with st.spinner("正在加密回传数据，请稍候..."):
                 try:
-                    # 加入 ttl=0，彻底阻断云端缓存导致的数据覆盖问题
                     conn = st.connection("gsheets", type=GSheetsConnection)
                     try:
                         existing_data = conn.read(worksheet="Sheet1", ttl=0) 
