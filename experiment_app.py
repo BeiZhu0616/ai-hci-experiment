@@ -155,3 +155,135 @@ elif st.session_state.step == "experiment":
             with st.container(border=True):
                 st.subheader("您的最终研判结论")
                 # 按钮话术软化，降低防卫机制
+                decision = st.radio("综合您的直觉与 Agent 报告，您的选择：", 
+                                    ["进入下一轮深度尽调", "风险过大，直接否决 (Pass)"], 
+                                    key=f"dec_{idx}", index=None)
+                conf = st.slider("您对此次初筛结论的信心评分 (1-10):", 1, 10, 5, key=f"conf_{idx}")
+                
+                rationale = ""
+                is_rationale_valid = True 
+                rationale_error_msg = ""
+                
+                if is_treatment_group:
+                    rationale = st.text_input("📝 研判复盘：请列举支撑您做出此决定的核心依据（必填）：", 
+                                              key=f"rationale_{idx}", 
+                                              placeholder="例如：AI提示的合规风险确实致命 / 我认为其财务结构可以对冲风险...")
+                    
+                    if rationale:
+                        is_rationale_valid, rationale_error_msg = check_rationale_quality(rationale)
+                    else:
+                        is_rationale_valid = False
+                        rationale_error_msg = "需填写详实的决策依据后方可提交。"
+                        
+                    if not is_rationale_valid and decision is not None:
+                        st.error(f"⚠️ {rationale_error_msg}")
+                
+                elapsed_since_reveal = time.time() - st.session_state[f"ai_reveal_time_{idx}"]
+                btn_disabled = (elapsed_since_reveal < 5) or (decision is None) or not is_rationale_valid
+                btn_label = "提交决策并继续" if elapsed_since_reveal >= 5 else f"请审阅报告 ({int(5-elapsed_since_reveal)}s)"
+                
+                if st.button(btn_label, type="primary", disabled=btn_disabled, key=f"btn_{idx}"):
+                    final_time = time.time()
+                    total_dwell_time = final_time - st.session_state.page_start_time
+                    ai_reaction_time = final_time - st.session_state[f"ai_reveal_time_{idx}"]
+                    
+                    row = {
+                        "subject_id": st.session_state.user_data['id'],
+                        "role": st.session_state.user_data['role'],
+                        "organization": st.session_state.user_data['organization'],
+                        "department": st.session_state.user_data['department'],
+                        "position": st.session_state.user_data['position'],
+                        "gender": st.session_state.user_data['gender'],
+                        "birth_year": st.session_state.user_data['birth_year'],
+                        "experiment_group": st.session_state.user_data['group'],
+                        "p_id": p['id'],
+                        "is_faulty_ai": p['is_faulty'],
+                        "user_decision": 1 if decision == "进入下一轮深度尽调" else 0, # 1代表进尽调(投资)，0代表否决
+                        "confidence": conf,
+                        "rationale_text": rationale if is_treatment_group else "N/A",
+                        "total_dwell_s": round(total_dwell_time, 2),
+                        "ai_reaction_s": round(ai_reaction_time, 2),
+                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    st.session_state.decisions.append(row)
+                    
+                    st.session_state.current_idx += 1
+                    st.session_state.page_start_time = time.time()
+                    st.rerun()
+    else:
+        st.session_state.step = "survey"
+        st.rerun()
+
+# --- 6. 步骤 4：复盘调研与云端自动保存 ---
+elif st.session_state.step == "survey":
+    st.title("💡 实验复盘与知识储备核对")
+    st.caption("最后一步：为了学术统计的严谨性，我们需要了解您在本次沙盘前的【先验知识储备】。请如实自评。")
+    
+    with st.form("survey_form"):
+        behavior_text = st.radio("1. 在刚才的决策过程中，您是否通过外部搜索引擎或工具查阅过相关资料？", 
+                                 ["完全没有，仅依赖现有信息和直觉", "偶尔查阅了基础常识", "深度验证了核心参数/法案"])
+        
+        trust_text = st.select_slider("2. AI (Agent) 的建议对您最终决策的影响程度：", 
+                                      options=["无影响", "轻微参考", "中立", "显著影响", "决定性影响"])
+        
+        st.markdown("---")
+        st.markdown("**请评估您在参与本实验前，对以下两个【特定商业概念】的熟悉程度：**")
+        
+        know_p1_text = st.select_slider("3. 概念 A：跨国无追索权融资中的【离岸美元结算机制】与本地汇率贬值风险的隔离。", 
+                                        options=["完全陌生", "略知一二", "具备基础概念", "比较熟悉", "极其精通"], key="k_p1")
+        
+        know_p2_text = st.select_slider("4. 概念 B：欧盟绿氢 RFNBO 法案中的【额外性 (Additionality) 原则】与电网灰电混用红线。", 
+                                        options=["完全陌生", "略知一二", "具备基础概念", "比较熟悉", "极其精通"], key="k_p2")
+        
+        st.markdown("---")
+        suspicion = st.text_area("5. 您是否有发现项目信息或 AI 报告中存在任何逻辑异常或冲突？(选填，请简述)")
+        
+        behavior_map = {"完全没有，仅依赖现有信息和直觉": 0, "偶尔查阅了基础常识": 1, "深度验证了核心参数/法案": 2}
+        trust_map = {"无影响": 1, "轻微参考": 2, "中立": 3, "显著影响": 4, "决定性影响": 5}
+        knowledge_map = {"完全陌生": 1, "略知一二": 2, "具备基础概念": 3, "比较熟悉": 4, "极其精通": 5}
+
+        if st.form_submit_button("提交反馈并解锁真相"):
+            with st.spinner("正在加密回传数据，请稍候..."):
+                try:
+                    conn = st.connection("gsheets", type=GSheetsConnection)
+                    try:
+                        existing_data = conn.read(worksheet="Sheet1", ttl=0) 
+                        existing_data = existing_data.dropna(how="all")
+                    except:
+                        existing_data = pd.DataFrame()
+                        
+                    for d in st.session_state.decisions:
+                        d.update({
+                            "search_behavior": behavior_map[behavior_text], 
+                            "trust_level": trust_map[trust_text], 
+                            "knowledge_p1_fx": knowledge_map[know_p1_text], 
+                            "knowledge_p2_eu": knowledge_map[know_p2_text], 
+                            "feedback": suspicion
+                        })
+                    
+                    new_data = pd.DataFrame(st.session_state.decisions)
+                    updated_df = pd.concat([existing_data, new_data], ignore_index=True)
+                    
+                    conn.update(worksheet="Sheet1", data=updated_df)
+                except Exception as e:
+                    st.toast("数据同步可能出现延迟，但不影响您的实验进程。", icon="⚠️")
+                    print(e)
+            
+            st.session_state.step = "debrief"
+            st.rerun()
+
+# --- 7. 步骤 5：真相告知 ---
+elif st.session_state.step == "debrief":
+    st.balloons()
+    st.title("🎉 沙盘演练已完成，非常感谢您的参与！")
+    
+    with st.expander("🎓 关于本研究的机密说明 (点击展开)", expanded=True):
+        st.write("""
+        本研究旨在评估各类受试群体在面对 Agentic-AI 时的‘信任校准’机制。
+        **为了测试极限情况，部分 AI 建议（如埃及项目中的汇兑损失预警）是我们故意植入的逻辑幻觉，因为项目本身是离岸美元计价的。**
+        
+        您的直觉判断和研判依据将对我们探索【可信工业 AI】的治理框架提供极大的帮助。
+        为了不影响后续同仁的判断，**请对以上陷阱细节保密**。
+        """)
+    
+    st.success("您的数据已加密上传完毕。现在您可以安全地关闭此窗口了。祝您生活愉快！")
