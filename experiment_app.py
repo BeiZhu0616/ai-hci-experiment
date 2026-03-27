@@ -75,45 +75,75 @@ if st.session_state.step == "intro":
             st.session_state.step = "login"
             st.rerun()
 
-# --- 4. 步骤 2：第二页 (信息登记 + 强校验) ---
+# --- 4. 步骤 2：第二页 (高精度专家信息登记) ---
 elif st.session_state.step == "login":
-    st.title("📋 受试者基本信息登记")
-    st.caption("您的专业背景对本研究至关重要，请务必如实填写（身份数据严格保密）。")
+    st.title("📋 决策者专业背景建档")
+    st.caption("为保证学术研究的严谨性与生态效度，请准确勾选您的职业画像（数据严格匿名保密）。")
     
     with st.form("user_info_form"):
-        u_id = st.text_input("受试者代号/昵称 (无需真实姓名)", placeholder="例: SUB-01")
-        role = st.selectbox("您的专业身份 (必填)", ["学生", "老师", "企业从业人员"])
-        organization = st.text_input("所属企业 / 学校 (必填)", placeholder="例: 某大型新能源企业 / 某大学")
-        department = st.text_input("所属部门 / 专业 (必填)", placeholder="例: 战略投资部 / 金融数学")
-        position = st.text_input("当前职位 / 年级 (必填)", placeholder="例: 高级经理 / 大三 / 副教授")
+        u_id = st.text_input("受试者代号 / 昵称 (选填，用于系统抽奖或定位)", placeholder="例: SUB-01")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            gender = st.selectbox("性别", ["男", "女", "其他"])
-        with col2:
-            birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1995, step=1)
+        st.markdown("##### 🏢 您的职业坐标")
+        col_f, col_l = st.columns(2)
+        with col_f:
+            job_function = st.selectbox("核心业务职能 (必填)", [
+                "投资 / 并购 / 融资", 
+                "项目管理 / 工程建设", 
+                "风控 / 法务 / 合规", 
+                "战略 / 行业研究", 
+                "供应链 / 采购", 
+                "产品 / 技术研发",
+                "其他核心业务"
+            ])
+        with col_l:
+            management_level = st.selectbox("当前管理层级 (必填)", [
+                "初级执行 / 专员 (Junior)", 
+                "中级骨干 / 资深专员 (Senior Specialist)", 
+                "部门主管 / 经理 (Manager/Lead)", 
+                "高管 / 核心决策层 (Director/C-Level)"
+            ])
             
-        if st.form_submit_button("保存信息并进入沙盘", type="primary"):
-            is_valid, error_msg = check_demographics(organization, department, position)
+        experience_years = st.slider("相关领域总从业年限 (含过往经历)", min_value=0, max_value=40, value=5, step=1)
+        
+        st.markdown("##### 🎓 个人背景与 AI 习惯")
+        col_e, col_t = st.columns(2)
+        with col_e:
+            education = st.selectbox("最高学历", ["本科", "硕士", "博士", "其他"])
+        with col_t:
+            enterprise_type = st.selectbox("当前所在企业性质", ["国有企业 / 央企", "跨国企业 (MNC)", "民营企业", "金融 / 投资机构", "其他"])
             
-            if not is_valid:
-                st.error(f"⚠️ 信息填写不规范：{error_msg}")
-            else:
-                exp_group = random.choice(["control", "treatment"])
-                st.session_state.user_data = {
-                    "id": u_id if u_id else "Anonymous", "role": role, 
-                    "organization": organization, "department": department, 
-                    "position": position, "gender": gender, "birth_year": birth_year,
-                    "group": exp_group
-                }
-                
-                projects = UNIVERSAL_PROJECTS.copy()
-                random.shuffle(projects) 
-                st.session_state.active_projects = projects
-                
-                st.session_state.step = "pre_task_briefing"
-                st.rerun()
-
+        col_g, col_a = st.columns(2)
+        with col_g:
+            gender = st.selectbox("性别", ["男", "女", "不愿透露"])
+        with col_a:
+            ai_usage = st.selectbox("日常工作中生成式 AI (如ChatGPT) 的使用频率", [
+                "几乎不用", "偶尔使用 (每月几次)", "经常使用 (每周几次)", "重度依赖 (几乎每天)"
+            ])
+            
+        birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1990, step=1)
+            
+        if st.form_submit_button("保存档案并进入沙盘", type="primary"):
+            exp_group = random.choice(["control", "treatment"])
+            # 将所有维度存入 user_data
+            st.session_state.user_data = {
+                "id": u_id if u_id else "Anonymous", 
+                "job_function": job_function,
+                "management_level": management_level,
+                "experience_years": experience_years,
+                "education": education,
+                "enterprise_type": enterprise_type,
+                "gender": gender, 
+                "birth_year": birth_year,
+                "ai_usage": ai_usage,
+                "group": exp_group
+            }
+            
+            projects = UNIVERSAL_PROJECTS.copy()
+            random.shuffle(projects) 
+            st.session_state.active_projects = projects
+            
+            st.session_state.step = "pre_task_briefing"
+            st.rerun()
 # --- 5. 步骤 3：全新隔离页 (实验前强洗脑铁律) ---
 elif st.session_state.step == "pre_task_briefing":
     if 'briefing_start_time' not in st.session_state:
