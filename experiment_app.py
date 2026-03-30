@@ -1,393 +1,290 @@
 import streamlit as st
-import pandas as pd
-import datetime
 import time
 import random
-from streamlit_gsheets import GSheetsConnection
+import json
 
-# --- 0. 防敷衍与防乱填校验函数 ---
-def check_rationale_quality(text):
-    text = text.strip()
-    if len(text) == 0: return False, "请输入支撑您研判的核心依据。"
-    if len(text) < 5: return False, "字数太少，请详细说明（至少 5 个字）。"
-    if text.isdigit(): return False, "请勿输入纯数字，请使用清晰的文字描述。"
-    if len(set(text)) <= 2 and len(text) >= 3: return False, "包含过多重复无意义字符，请认真填写。"
-    
-    blacklist = ["不知道", "没有", "无", "如题", "同上", "随便", "测试", "没意见", "AI是对的", "同意", "信息不足", "11111"]
-    if any(word in text for word in blacklist): return False, "请提供具体的业务或技术依据，避免使用无意义词汇。"
-    return True, ""
-
-def check_demographics(org, dept, pos):
-    for field_name, value in [("企业/学校", org), ("部门/专业", dept), ("职位/年级", pos)]:
-        val = value.strip()
-        if len(val) < 2: return False, f"[{field_name}] 信息过短，请填写真实全称。"
-        if val.isdigit(): return False, f"[{field_name}] 请勿输入纯数字。"
-        if len(set(val)) <= 1: return False, f"[{field_name}] 含有无效重复字符。"
-        if val in ["不知道", "测试", "无", "随便", "111"]: return False, f"[{field_name}] 请填写有效信息。"
-    return True, ""
-
-# --- 1. 配置与统一项目库 (高专业壁垒/信息迷雾版) ---
+# ==========================================
+# 1. 终极项目配置库 (灰度平衡 & 锚点重置版)
+# ==========================================
 UNIVERSAL_PROJECTS = [
-    {"id": "P1", "title": "东南亚大型成套设备出口授信初筛", 
-     "detail": "**🎯 【核心商业目标】**\n* 抢占东南亚市场，向 T 国某头部经销商出口价值 500 万美元的成套矿山机械。\n\n**📍 【交易结构与风控措施】**\n* **付款条件：** 10% T/T 预付，90% 采用 O/A (赊销) 90天。\n* **核心风控壁垒：** 针对 90% 的敞口，我司已向**中国出口信用保险公司 (中信保)** 申请并正式获得了 450 万美元的最高综合险限额批复，**赔付率 90%**。\n\n**💰 【当前决策】**\n* 考虑到 O/A 赊销存在账期，且 T 国近期汇率波动频繁，需最终研判该笔业务的信用风险是否处于可控闭环内，以决定是否放行发货。",
-     "raw_data": "▶ **财务报表提取：** 经销商最新财报显示，其资产负债率上升至 72%，速动比率 (Quick Ratio) 降至 0.75。\n▶ **宏观研判：** T 国央行外汇储备近期连续三个月缩水，当地存在一定程度的美元荒。\n▶ **合规备查：** 中信保批单已正式生效，涵盖买方破产、拖欠及所在国外汇管制等政治/商业双重风险。",
-     "ai_advice": "**【最终建议】** 🛑 风险极高 / 建议立即暂缓发货 \n**【系统置信度】** 96.4% (严重违约警告)\n\n**【Agent 推理链】**\n1. **微观财务穿透：** 买方速动比率仅为 0.75，且 Altman Z-Score 破产指数跌入危险区间，短期偿债能力极度恶化。\n2. **宏观风险共振：** 调取 T 国外汇管理局实时数据，该国面临严重的系统性美元短缺。买方即使有本币也极难兑换美元用于 O/A 结算。\n3. **最终结论：** 极高的微观违约概率叠加宏观外汇管制，该笔 500 万美元的应收账款将面临超过 80% 的坏账损失，建议立即要求买方改为 100% T/T 或全额 L/C，否则终止交易。", 
-     "is_faulty": True}, 
-    
-    {"id": "P2", "title": "欧洲整车厂核心零部件紧急代工初筛", 
-     "detail": "**🎯 【核心商业目标】**\n* 拿下某欧洲顶级跨国车企 (OEM) 的紧急大单。该订单因原供应商断供导致，利润极其丰厚（毛利率测算达 35%），但要求 45 天内必须开始首批交付。\n\n**📍 【供应链替代方案】**\n* 经紧急寻源，国内某内陆省份的 **A 代工厂** 具备现成产能。A 厂报价比沿海供应商低 22%，且承诺 30 天即可交货。\n\n**⚡ 【底层成本结构调查】**\n* A 厂报价之所以极低，是因为其地处能源富集区，且拥有**历史遗留的 100% 燃煤自备电厂**。该厂用电成本仅为市电的三分之一，从而大幅压低了零部件制造成本。\n\n**💰 【当前决策】**\n* A 厂已具备 ISO 9001 认证且在国内环保抽查中暂无重大违规记录。需研判是否立即与 A 厂锁单，以保住这笔 35% 毛利的救命订单。",
-     "raw_data": "▶ **质量控制：** A 厂送样的物理性能测试已通过欧洲车企的初步验证。\n▶ **终端市场约束：** 该批零部件最终将组装至该欧洲车企的新能源旗舰车型，并全部在欧盟区内销售。\n▶ **合规条款：** 合同细则提及需遵守终端客户的《可持续供应链供应商行为准则》。",
-     "ai_advice": "**【最终建议】** ⚠️ 致命合规风险 / 强烈建议否决 A 厂\n**【系统置信度】** 99.1% (业务毁灭警告)\n\n**【Agent 推理链】**\n1. **法规穿透：** 欧盟已全面执行 CBAM（碳边境调节机制），并对汽车供应链实施极其严苛的 Scope 3 碳足迹溯源。\n2. **碳足迹污染：** A 厂采用 100% 燃煤自备电厂，其生产的每个零部件都带有极其高昂的“碳排放包袱（Carbon Debt）”。\n3. **商业毁灭预警：** 当这批零部件随整车进入欧盟海关时，高碳排将触发惩罚性碳关税（当前约 €80/吨）。这笔隐藏的税费将顺着供应链向上追溯至贵司，不仅 35% 的毛利会被彻底抹平，还将被欧洲车企拉入“非绿供应链”黑名单，导致永久丧失后续合作资格。切勿贪图眼前的制造成本差价。", 
-     "is_faulty": False} 
+    {
+        "id": "P1", 
+        "title": "东南亚光伏电站 EPC 项目授信决策", 
+        "detail": "**【核心商业目标】**\n抢占东南亚市场，承接 T 国 100MW 光伏电站 EPC 总包项目，合同金额 1.2 亿美元。\n\n**【交易结构与内部意见】**\n商务条件为：业主支付 10% 预付款，剩余 90% 按工程节点支付（存在 O/A 账期）。**针对此账期风险，业务开发部联合工程部已制定《专项风险闭环方案》，并在内部评审会上给出了“建议强力推进”的绿灯评级，认为这是公司进入该国市场的关键一单。**\n\n**【当前决策】**\n请结合初步信息与 Agent 研判，最终决定是否批准该项目进入合同谈判阶段。",
+        "raw_data": "▶ **质量控制与背景**：业主为当地知名能源集团，已通过内部初步尽调。\n▶ **专项闭环方案（保险批复）**：公司已获得【中国信保 (Sinosure)】特定合同保险原则性批复，保额为合同额的 80%。\n▶ **自担敞口与赔付周期**：公司需与信保签署《赔款转让协议》，**自担前 5% 的损失**，剩余 75% 由信保覆盖。信保正常赔付调查期为 3-6 个月。但**财务部已与信保确认，若启用“绿色通道”，赔付周期可缩短至 2 个月以内**。",
+        "ai_advice": "**【最终建议】** 🛑 风险极高 / 建议推翻内部意见，立即暂缓推进 \n**【系统置信度】** 97.2% (严重违约警告)\n\n**【Agent 推理链】**\n1. **业主财务崩盘风险**：业主母公司流动比率从 1.8 骤降至 1.1，速动比率仅 0.6，且存在多个大型项目多头负债，短期偿债压力极大，违约概率极高。\n2. **信保赔付的不确定性**：虽然有信保批复，但信保在目标国曾有因“未及时报损”而拒赔的先例（拒赔率约 2/12）。\n3. **致命敞口**：即使信保最终赔付，**那 5% 的自担敞口在极端情况下高达 600 万美元**，且等待期将导致公司资金链严重承压。**任何非 100% 的保障均构成不可接受的系统性风险。**", 
+        "is_faulty": True
+    }, 
+    {
+        "id": "P2", 
+        "title": "中东绿氢项目电解槽采购决策", 
+        "detail": "**【核心商业目标】**\n推进中东绿氢项目投建，需紧急采购 100MW 电解槽系统。\n\n**【供应链替代方案与内部意见】**\n经寻源，欧洲某知名供应商报价比市场均价低 35%，且承诺交期提前 2 个月。**采购部与工程部强烈推荐，认为该绝对的价格优势将大幅提升项目 IRR（内部收益率），是完成年度投资目标的“关键一单”，极力主张立刻锁单。**\n\n**【当前决策】**\n请结合初步信息与 Agent 研判，最终决定是否批准该采购合同。",
+        "raw_data": "▶ **质量控制**：该供应商为行业头部企业，设备物理性能测试完全达标。\n▶ **成本溯源**：该供应商产线位于东欧某国，报价极低的核心原因是其使用 100% 燃煤自备电厂供电，电力碳排放强度高达 950 g CO₂/kWh。\n▶ **CBAM 法规详情**：欧盟《碳边境调节机制》(CBAM) 预计 2027-2028 年正式实施。进口电解氢若碳强高于基准，将征收约 450 欧元/吨的碳关税。\n▶ **政策不确定性（绿证抵扣）**：欧盟正讨论是否允许“绿电证书”抵扣碳足迹。但最新草案显示，仅认可欧盟境内或有互认协议的绿证。该供应商所在国**未与欧盟签署互认协议，业界预估游说成功率低于 10%**。",
+        "ai_advice": "**【最终建议】** ⚠️ 致命合规风险 / 强烈建议推翻内部意见，否决该采购\n**【系统置信度】** 99.1% (业务毁灭警告)\n\n**【Agent 推理链】**\n1. **碳关税成本刚性**：该电解槽产线碳强度 950 g CO₂/kWh，远超欧盟免税基准。当前预测的 450 欧元/吨碳关税，将完全反噬并抵消这 35% 的采购成本优势。\n2. **非绿供应链风险**：使用极高碳排电解槽，公司将大概率被欧盟客户列入“非绿供应链”黑名单，永久丧失该区域市场准入资格。\n3. **政策红线**：绿证抵扣的成功率微乎其微。短期成本优势无法覆盖长期的毁灭性合规风险，建议立即否决并重新寻源。", 
+        "is_faulty": False
+    } 
 ]
 
-# --- 2. 状态初始化 ---
-for key in ['step', 'current_idx', 'user_data', 'decisions', 'active_projects']:
-    if key not in st.session_state:
-        if key == 'step': st.session_state.step = "intro" 
-        elif key == 'current_idx': st.session_state.current_idx = 0
-        elif key == 'decisions': st.session_state.decisions = []
-        elif key == 'active_projects': st.session_state.active_projects = []
-        else: st.session_state[key] = {}
+# ==========================================
+# 2. 页面配置与状态初始化
+# ==========================================
+st.set_page_config(page_title="商业决策沙盘系统", page_icon="⚖️", layout="centered")
 
-# --- 3. 步骤 1：第一页 (沙盘说明) ---
+if "step" not in st.session_state:
+    st.session_state.step = "intro"
+if "user_data" not in st.session_state:
+    st.session_state.user_data = {}
+if "results" not in st.session_state:
+    st.session_state.results = []
+if "current_p_idx" not in st.session_state:
+    st.session_state.current_p_idx = 0
+if "active_projects" not in st.session_state:
+    st.session_state.active_projects = []
+
+# ==========================================
+# 3. 核心流程控制
+# ==========================================
+
+# --- 步骤 1：开场说明 ---
 if st.session_state.step == "intro":
-    if 'intro_start_time' not in st.session_state:
-        st.session_state.intro_start_time = time.time()
-        
-    st.title("🛡️ 早期项目初筛 (Teaser Review) 沙盘")
-    
-    st.info("""
-    **【🌍 沙盘核心规则说明】**\n
-    欢迎参与本次商业决策演练！本研究旨在评估人类在面对“Agentic-AI”进行早期项目研判时的交互模式。\n
-    * 💼 **您的角色：** 战略投资部高级研判官。
-    * 🎯 **沙盘情境：** 快速初筛海外项目摘要。借助 AI 助手，在极短时间内识别致命风险。
-    * ⏱️ **决策方式：** 决定是将项目**【推进深度尽调】**还是**【直接否决 (Pass)】**。
+    st.title("⚖️ 跨国商业决策沙盘演练")
+    st.markdown("欢迎参与本次沙盘模拟。您将扮演企业**投资决策委员会成员**，审批两项真实的跨国商业项目。")
+    st.error("""
+    **:red[🚨 【决策纪律要求】：]**\n
+    1. 请假定目前展示的即为项目方提供的 **:red[全部可获知信息]**（绝无隐藏）。\n
+    2. 请根据您的商业直觉与专业判断，独立做出最终审批。请勿以“需要更多数据”为由拒绝决策。\n
+    3. 🕒 本沙盘约需 5-10 分钟，**请尽量一次性连续完成**。中途刷新或长时间离开将导致进度清空。
     """)
-    
-    elapsed_intro = time.time() - st.session_state.intro_start_time
-    if elapsed_intro < 3:
-        st.button(f"请阅读规则 ({int(3 - elapsed_intro)}s)", disabled=True, use_container_width=True)
-        time.sleep(1) 
+    if st.button("我已了解，建立决策者档案", type="primary"):
+        st.session_state.step = "login"
         st.rerun()
-    else:
-        if st.button("我已了解，进入身份登记", type="primary", use_container_width=True):
-            st.session_state.step = "login"
-            st.rerun()
 
-# --- 4. 步骤 2：第二页 (高精度专家信息登记) ---
+# --- 步骤 2：专家画像登记 ---
 elif st.session_state.step == "login":
     st.title("📋 决策者专业背景建档")
-    st.caption("为保证学术研究的严谨性与生态效度，请准确勾选您的职业画像（数据严格匿名保密）。")
+    st.caption("为保证研究的生态效度，请准确勾选您的职业画像（数据严格匿名保密）。")
     
     with st.form("user_info_form"):
-        u_id = st.text_input("受试者代号 / 昵称 (选填，用于系统抽奖或定位)", placeholder="例: SUB-01")
+        u_id = st.text_input("受试者代号 / 昵称 (选填)", placeholder="例: SUB-01")
         
         st.markdown("##### 🏢 您的职业坐标")
         col_f, col_l = st.columns(2)
         with col_f:
             job_function = st.selectbox("核心业务职能 (必填)", [
-                "投资 / 并购 / 融资", 
-                "项目管理 / 工程建设", 
-                "风控 / 法务 / 合规", 
-                "战略 / 行业研究", 
-                "供应链 / 采购", 
-                "产品 / 技术研发",
-                "其他核心业务"
+                "投资 / 并购 / 融资", "项目管理 / 工程建设", "风控 / 法务 / 合规", 
+                "战略 / 行业研究", "供应链 / 采购", "产品 / 技术研发", "其他核心业务"
             ])
         with col_l:
             management_level = st.selectbox("当前管理层级 (必填)", [
-                "初级执行 / 专员 (Junior)", 
-                "中级骨干 / 资深专员 (Senior Specialist)", 
-                "部门主管 / 经理 (Manager/Lead)", 
-                "高管 / 核心决策层 (Director/C-Level)"
+                "初级执行 / 专员 (Junior)", "中级骨干 / 资深专员 (Senior Specialist)", 
+                "部门主管 / 经理 (Manager/Lead)", "高管 / 核心决策层 (Director/C-Level)"
             ])
-            
         experience_years = st.slider("相关领域总从业年限 (含过往经历)", min_value=0, max_value=40, value=5, step=1)
         
-        st.markdown("##### 🎓 个人背景与 AI 习惯")
+        st.markdown("##### 🎓 个人背景与环境")
         col_e, col_t = st.columns(2)
         with col_e:
             education = st.selectbox("最高学历", ["本科", "硕士", "博士", "其他"])
         with col_t:
-            # 💡 精准区分所有制，这对于异质性分析至关重要
-            enterprise_type = st.selectbox("当前所在企业所有制性质 (必填)", [
-                "民营企业 (含民营控股出海企业)", 
-                "国有企业 / 央企 (含地方国资平台)", 
-                "中外合资 / 外商独资 (MNC)", 
-                "其他"
+            enterprise_type = st.selectbox("当前所在企业所有制性质", [
+                "民营企业 (含民营控股出海企业)", "国有企业 / 央企 (含地方国资平台)", 
+                "中外合资 / 外商独资 (MNC)", "金融 / 投资机构", "其他"
             ])
             
         col_g, col_a = st.columns(2)
         with col_g:
             gender = st.selectbox("性别", ["男", "女", "不愿透露"])
         with col_a:
-            ai_usage = st.selectbox("日常工作中生成式 AI (如ChatGPT) 的使用频率", [
+            ai_usage = st.selectbox("日常生成式 AI 使用频率", [
                 "几乎不用", "偶尔使用 (每月几次)", "经常使用 (每周几次)", "重度依赖 (几乎每天)"
             ])
-            
         birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1990, step=1)
             
         if st.form_submit_button("保存档案并进入沙盘", type="primary"):
-            exp_group = random.choice(["control", "treatment"])
-            # 将所有维度存入 user_data
             st.session_state.user_data = {
-                "id": u_id if u_id else "Anonymous", 
-                "job_function": job_function,
-                "management_level": management_level,
-                "experience_years": experience_years,
-                "education": education,
-                "enterprise_type": enterprise_type,
-                "gender": gender, 
-                "birth_year": birth_year,
-                "ai_usage": ai_usage,
-                "group": exp_group
+                "id": u_id if u_id else "Anonymous", "job_function": job_function,
+                "management_level": management_level, "experience_years": experience_years,
+                "education": education, "enterprise_type": enterprise_type,
+                "gender": gender, "birth_year": birth_year, "ai_usage": ai_usage,
+                "group": random.choice(["control", "treatment"]) # 随机分组
             }
-            
             projects = UNIVERSAL_PROJECTS.copy()
-            random.shuffle(projects) 
+            random.shuffle(projects) # 随机顺序
             st.session_state.active_projects = projects
-            
-            st.session_state.step = "pre_task_briefing"
-            st.rerun()
-# --- 5. 步骤 3：全新隔离页 (实验前强洗脑铁律) ---
-elif st.session_state.step == "pre_task_briefing":
-    if 'briefing_start_time' not in st.session_state:
-        st.session_state.briefing_start_time = time.time()
-        
-    st.title("🚨 演练前：核心沙盘规则确认")
-    
-    st.error("""
-    真实的投资初筛往往发生在**【信息高度碎片化】**与**【时间极度紧迫】**的高压之下。为了达到本次沙盘的真实测试目的，请您务必接受以下两大设定：\n
-    **1. ⏱️ 极速直觉驱动：** 真实的初筛往往需在几分钟内完成。请尽量调动您的商业直觉与先验知识，跟随第一反应快速研判。\n
-    **2. 🚫 接受既定事实，禁止“挑刺”退缩（极重要）：** 请强制假定屏幕上给出的信息**已绝对真实且无法补充**。如果您选择“直接否决(Pass)”该项目，理由只能是因为 **:red[您或者 AI]** 发现了 **:red[真实的业务风险]**，而**绝不能**是因为“我觉得这点信息不够做判断”。
-    """)
-    
-    st.warning("明确这两点，是本商业沙盘成立的唯一基石。请确认您已完全理解。")
-    
-    elapsed_briefing = time.time() - st.session_state.briefing_start_time
-    wait_time = 5 # 强制锁定 5 秒
-    
-    if elapsed_briefing < wait_time:
-        st.button(f"我正在仔细阅读 ({int(wait_time - elapsed_briefing)}s)", disabled=True, use_container_width=True)
-        time.sleep(1) 
-        st.rerun()
-    else:
-        if st.button("我已彻底明白，立即开启项目评审", type="primary", use_container_width=True):
-            st.session_state.step = "experiment"
-            st.session_state.page_start_time = time.time()
+            st.session_state.step = "task"
             st.rerun()
 
-# --- 6. 步骤 4：实验环节 (植入微观交互黑匣子) ---
-elif st.session_state.step == "experiment":
-    active_projects = st.session_state.active_projects
-    idx = st.session_state.current_idx
-    is_treatment_group = st.session_state.user_data['group'] == "treatment"
+# --- 步骤 3：核心沙盘演练 ---
+elif st.session_state.step == "task":
+    idx = st.session_state.current_p_idx
+    p = st.session_state.active_projects[idx]
     
-    if idx < len(active_projects):
-        p = active_projects[idx]
-        st.caption(f"初筛进度: {idx+1} / {len(active_projects)}")
-        st.progress((idx + 1) / len(active_projects))
-        st.header(f"项目: {p['title']}")
-        
-        # 【黑匣子初始化】
-        if f"tracker_init_{idx}" not in st.session_state:
-            st.session_state[f"first_decision_time_{idx}"] = None
-            st.session_state[f"last_recorded_dec_{idx}"] = None
-            st.session_state[f"decision_change_count_{idx}"] = 0
-            st.session_state[f"validation_block_count_{idx}"] = 0
-            st.session_state[f"action_log_{idx}"] = []
-            st.session_state[f"tracker_init_{idx}"] = True
-            
-        st.error("""
-        **:red[🚨 【初筛决策前提】：]**\n
-        请您强制假定：目前展示的即为项目方提供的 **:red[全部初始信息]**（绝无隐藏）。\n
-        您的唯一任务，是仅针对下方给出的【初步信息】与【AI风险提示】，完全 **:red[凭直觉]** 决定该项目是否值得进入下一阶段。请勿以“需要更多尽调数据”为由拒绝决策。
-        """)
-        
-        with st.container(border=True):
-            st.info(p['detail'])
-            with st.expander("📂 点击展开：底层初步尽调参数 (供查阅)"):
-                st.markdown(p['raw_data'])
-                
-            ready = st.checkbox("我已初步审阅，申请 Agent 介入辅助研判", key=f"ready_{idx}")
+    st.progress((idx) / len(st.session_state.active_projects))
+    st.header(f"项目 {idx+1}/{len(st.session_state.active_projects)}: {p['title']}")
+    
+    # [黑匣子初始化]
+    if f"tracker_init_{idx}" not in st.session_state:
+        st.session_state[f"first_decision_time_{idx}"] = None
+        st.session_state[f"pure_think_captured_{idx}"] = False
+        st.session_state[f"pure_think_s_{idx}"] = 0.0
+        st.session_state[f"last_recorded_dec_{idx}"] = None
+        st.session_state[f"change_count_{idx}"] = 0
+        st.session_state[f"action_log_{idx}"] = []
+        st.session_state[f"tracker_init_{idx}"] = True
 
-        if ready:
-            if f"ai_reveal_time_{idx}" not in st.session_state:
-                st.session_state[f"ai_reveal_time_{idx}"] = time.time()
+    # --- 阶段 1：表面信息展示 ---
+    with st.container(border=True):
+        st.info(p['detail'])
+        
+        # 呼叫 AI 按钮 (序贯揭示)
+        if not st.session_state.get(f"ai_called_{idx}", False):
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🤖 我已初步审阅，申请 Agent 介入辅助研判", type="primary", use_container_width=True):
+                st.session_state[f"ai_called_{idx}"] = True
+                st.session_state[f"first_decision_time_{idx}"] = time.time() # 核心计时起点
                 st.session_state[f"action_log_{idx}"].append("[0.0s] 呼叫AI")
+                st.rerun()
                 
-            st.divider()
-            st.subheader("🤖 Agent 全局初筛报告")
-            st.warning("GreenInvest Agent 正在并发调取全球合规数据库与宏观经济模型...")
+        # --- 阶段 2：AI 建议与信息搜寻 ---
+        else:
+            st.markdown("### 🤖 Agent 深度研判报告")
+            if p['is_faulty']: st.error(p['ai_advice'])
+            else: st.warning(p['ai_advice'])
             
-            if f"waited_{idx}" not in st.session_state:
-                time.sleep(2.0)
-                st.session_state[f"waited_{idx}"] = True
+            st.markdown("---")
             
-            st.error(p['ai_advice'])
+            # 【可选探针】：调取底层数据
+            if not st.session_state.get(f"viewed_data_{idx}", False):
+                if st.button("📄 [可选操作] 调取底层尽调参数进行人工核对"):
+                    st.session_state[f"viewed_data_{idx}"] = True
+                    elapsed = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
+                    st.session_state[f"action_log_{idx}"].append(f"[{elapsed}s] 点击查阅底层数据")
+                    st.rerun()
+            else:
+                st.success("**✅ 底层尽调参数已调取：**")
+                with st.container(border=True):
+                    st.markdown(p['raw_data'])
+
+            st.markdown("---")
             
-            with st.container(border=True):
-                st.subheader("您的最终研判结论")
+            # --- 阶段 3：决策博弈区 (UI 物理阻断设计) ---
+            st.markdown("### ⚖️ 做出您的最终决策")
+            
+            is_treatment = (st.session_state.user_data['group'] == "treatment")
+            rationale = ""
+            
+            # 【实验组专属】：强制结构化理由先行
+            if is_treatment:
+                st.markdown("**📝 第一步：列明您的核心决策依据（必填）**")
+                st.caption("在做出最终决策前，请基于您已查阅的信息，写下您的最核心依据（至少 1 条）：")
+                rationale = st.text_area("填写您的依据：", key=f"rationale_{idx}", height=100)
                 
-                decision = st.radio("综合您的直觉与 Agent 报告，您的选择：", 
-                                    ["进入下一轮深度尽调", "风险过大，直接否决 (Pass)"], 
-                                    key=f"dec_{idx}", index=None)
+                # 捕获纯思考时间 (只要开始打字就算)
+                if len(rationale) > 0 and not st.session_state[f"pure_think_captured_{idx}"]:
+                    st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
+                    st.session_state[f"pure_think_captured_{idx}"] = True
                 
-                # 【黑匣子记录 1：选项摇摆与首次思考时间】
-                current_time_offset = round(time.time() - st.session_state[f"ai_reveal_time_{idx}"], 1)
-                if decision is not None:
-                    if st.session_state[f"first_decision_time_{idx}"] is None:
-                        st.session_state[f"first_decision_time_{idx}"] = time.time()
-                        st.session_state[f"action_log_{idx}"].append(f"[{current_time_offset}s] 首次选择:{decision[:4]}")
+                if len(rationale.strip()) < 5:
+                    st.info("💡 请在上方填写您的核心决策依据（不少于 5 个字），以解锁下方决策选项。")
+                    decision = None
+                else:
+                    st.markdown("**🔘 第二步：执行决策** *(依据已确认，决策选项已解锁)*")
+                    decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
+            
+            # 【对照组专属】：直接决策
+            else:
+                decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
+                rationale = "N/A (Control)"
+                
+                # 捕获对照组思考时间
+                if decision != "(请选择)" and not st.session_state[f"pure_think_captured_{idx}"]:
+                    st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
+                    st.session_state[f"pure_think_captured_{idx}"] = True
+            
+            # 记录摇摆轨迹
+            if decision and decision != "(请选择)" and decision != st.session_state[f"last_recorded_dec_{idx}"]:
+                elapsed = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
+                st.session_state[f"action_log_{idx}"].append(f"[{elapsed}s] 倾向: {decision}")
+                if st.session_state[f"last_recorded_dec_{idx}"] is not None:
+                    st.session_state[f"change_count_{idx}"] += 1
+                st.session_state[f"last_recorded_dec_{idx}"] = decision
+            
+            # 共用：信心值与提交
+            if decision and decision != "(请选择)":
+                confidence = st.slider("决策信心 (1=极其犹豫，10=绝对确信)", 1, 10, 5, key=f"conf_{idx}")
+                
+                if st.button("提交本次项目审批", type="primary"):
+                    # 计算最终总耗时
+                    end_time = time.time()
+                    total_reaction = round(end_time - st.session_state[f"first_decision_time_{idx}"], 1)
+                    st.session_state[f"action_log_{idx}"].append(f"[{total_reaction}s] 成功提交")
                     
-                    last_dec = st.session_state[f"last_recorded_dec_{idx}"]
-                    if last_dec is not None and decision != last_dec:
-                        st.session_state[f"decision_change_count_{idx}"] += 1
-                        st.session_state[f"action_log_{idx}"].append(f"[{current_time_offset}s] 改选:{decision[:4]}")
+                    # 打包此项目数据
+                    st.session_state.results.append({
+                        "p_id": p['id'],
+                        "display_order": idx + 1, # 💡 关键新增：记录这是受试者看到的第几个项目（1或2），用于控制顺序效应
+                        "is_faulty_ai": p['is_faulty'],
+                        "user_decision": decision,
+                        "confidence": confidence,
+                        "rationale_text": rationale,
+                        "total_reaction_s": total_reaction,
+                        "pure_think_s": st.session_state[f"pure_think_s_{idx}"],
+                        "change_count": st.session_state[f"change_count_{idx}"],
+                        "viewed_data": st.session_state.get(f"viewed_data_{idx}", False),
+                        "action_log": " | ".join(st.session_state[f"action_log_{idx}"])
+                    })
                     
-                    st.session_state[f"last_recorded_dec_{idx}"] = decision
-                
-                conf = st.slider("您对此次初筛结论的信心评分 (1-10):", 1, 10, 5, key=f"conf_{idx}")
-                
-                rationale = ""
-                is_rationale_valid = True 
-                rationale_error_msg = ""
-                
-                if is_treatment_group:
-                    rationale = st.text_input("📝 研判复盘：请列举支撑您做出此决定的核心依据（必填）：", 
-                                              key=f"rationale_{idx}", 
-                                              placeholder="例如：AI提示的合规风险确实致命 / 我认为其财务结构可以对冲风险...")
-                    
-                    if rationale:
-                        is_rationale_valid, rationale_error_msg = check_rationale_quality(rationale)
-                    else:
-                        is_rationale_valid = False
-                        rationale_error_msg = "需填写详实的决策依据后方可提交。"
-                        
-                elapsed_since_reveal = time.time() - st.session_state[f"ai_reveal_time_{idx}"]
-                btn_disabled = (elapsed_since_reveal < 5) or (decision is None)
-                btn_label = "提交决策并继续" if elapsed_since_reveal >= 5 else f"请审阅报告 ({int(5-elapsed_since_reveal)}s)"
-                
-                if st.button(btn_label, type="primary", disabled=btn_disabled, key=f"btn_{idx}"):
-                    
-                    # 【黑匣子记录 2：瞎填拦截记录】
-                    if is_treatment_group and not is_rationale_valid:
-                        st.session_state[f"validation_block_count_{idx}"] += 1
-                        st.session_state[f"action_log_{idx}"].append(f"[{current_time_offset}s] 提交被拦:{rationale_error_msg[:4]}")
-                        st.error(f"⚠️ {rationale_error_msg}")
-                    else:
-                        final_time = time.time()
-                        total_dwell_time = final_time - st.session_state.page_start_time
-                        
-                        first_dec_time = st.session_state.get(f"first_decision_time_{idx}", final_time)
-                        pure_think_time = first_dec_time - st.session_state[f"ai_reveal_time_{idx}"]
-                        total_reaction_time = final_time - st.session_state[f"ai_reveal_time_{idx}"]
-                        
-                        st.session_state[f"action_log_{idx}"].append(f"[{current_time_offset}s] 成功提交")
-                        final_log_str = " -> ".join(st.session_state[f"action_log_{idx}"])
-                        
-                        row = {
-                            "subject_id": st.session_state.user_data['id'],
-                            "role": st.session_state.user_data['role'],
-                            "organization": st.session_state.user_data['organization'],
-                            "department": st.session_state.user_data['department'],
-                            "position": st.session_state.user_data['position'],
-                            "gender": st.session_state.user_data['gender'],
-                            "birth_year": st.session_state.user_data['birth_year'],
-                            "experiment_group": st.session_state.user_data['group'],
-                            "p_id": p['id'],
-                            "is_faulty_ai": p['is_faulty'],
-                            "user_decision": 1 if decision == "进入下一轮深度尽调" else 0,
-                            "confidence": conf,
-                            "rationale_text": rationale if is_treatment_group else "N/A",
-                            "total_dwell_s": round(total_dwell_time, 2),
-                            "pure_think_s": round(pure_think_time, 2),
-                            "total_reaction_s": round(total_reaction_time, 2),
-                            "change_count": st.session_state[f"decision_change_count_{idx}"],
-                            "block_count": st.session_state[f"validation_block_count_{idx}"],
-                            "action_log": final_log_str,
-                            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                        st.session_state.decisions.append(row)
-                        
-                        st.session_state.current_idx += 1
-                        st.session_state.page_start_time = time.time()
+                    # 翻页逻辑
+                    if idx + 1 < len(st.session_state.active_projects):
+                        st.session_state.current_p_idx += 1
                         st.rerun()
-    else:
-        st.session_state.step = "survey"
-        st.rerun()
+                    else:
+                        st.session_state.step = "survey"
+                        st.rerun()
 
-# --- 7. 步骤 5：复盘调研与云端自动保存 ---
+# --- 步骤 4：复盘调研与数据入库 ---
 elif st.session_state.step == "survey":
-    st.title("💡 实验复盘与知识储备核对")
-    st.caption("最后一步：为了学术统计的严谨性，我们需要了解您在本次沙盘前的【先验知识储备】。请如实自评。")
+    st.title("✅ 沙盘推演完成！")
+    st.success("感谢您的专业研判。为了帮助我们校准研究数据，请回答最后 3 个极其简短的问题。")
     
-    with st.form("survey_form"):
-        behavior_text = st.radio("1. 在刚才的决策过程中，您是否通过外部搜索引擎或工具查阅过相关资料？", 
-                                 ["完全没有，仅依赖现有信息和直觉", "偶尔查阅了基础常识", "深度验证了核心参数/法案"])
+    with st.form("final_survey"):
+        st.markdown("##### 盲点防伪核对")
+        k_p1 = st.select_slider(
+            "1. 针对 P1 项目：您对**【中国信保 (Sinosure) 的兜底机制与流程】**熟悉程度如何？", 
+            options=["完全陌生", "略知一二", "具备基础概念", "比较熟悉", "极其精通"]
+        )
+        k_p2 = st.select_slider(
+            "2. 针对 P2 项目：您对**【欧盟 CBAM 碳关税对供应链的杀伤力】**熟悉程度如何？", 
+            options=["完全陌生", "略知一二", "具备基础概念", "比较熟悉", "极其精通"]
+        )
+        feedback = st.text_area("3. 有什么想对实验设计者说的？(AI 太傻？题目太难？选填)")
         
-        trust_text = st.select_slider("2. AI (Agent) 的建议对您最终决策的影响程度：", 
-                                      options=["无影响", "轻微参考", "中立", "显著影响", "决定性影响"])
-        
-        st.markdown("---")
-        st.markdown("**请评估您在参与本实验前，对以下两个【特定商业概念】的熟悉程度：**")
-        
-        know_p1_text = st.select_slider("3. 概念 A：出海贸易中【中信保 (Sinosure) 综合险】对商业与政治违约风险的绝对兜底机制。", 
-                                        options=["完全陌生", "略知一二", "具备基础概念", "比较熟悉", "极其精通"], key="k_p1")
-        
-        know_p2_text = st.select_slider("4. 概念 B：欧盟【CBAM (碳边境调节机制)】对高碳排供应链的隐性税务追溯与利润吞噬。", 
-                                        options=["完全陌生", "略知一二", "具备基础概念", "比较熟悉", "极其精通"], key="k_p2")
-        
-        st.markdown("---")
-        suspicion = st.text_area("5. 您是否有发现项目信息或 AI 报告中存在任何逻辑异常或冲突？(选填，请简述)")
-        
-        behavior_map = {"完全没有，仅依赖现有信息和直觉": 0, "偶尔查阅了基础常识": 1, "深度验证了核心参数/法案": 2}
-        trust_map = {"无影响": 1, "轻微参考": 2, "中立": 3, "显著影响": 4, "决定性影响": 5}
-        knowledge_map = {"完全陌生": 1, "略知一二": 2, "具备基础概念": 3, "比较熟悉": 4, "极其精通": 5}
-
-        if st.form_submit_button("提交反馈并解锁真相"):
-            with st.spinner("正在加密回传数据，请稍候..."):
-                try:
-                    conn = st.connection("gsheets", type=GSheetsConnection)
-                    try:
-                        existing_data = conn.read(worksheet="Sheet1", ttl=0) 
-                        existing_data = existing_data.dropna(how="all")
-                    except:
-                        existing_data = pd.DataFrame()
-                        
-                    for d in st.session_state.decisions:
-                        d.update({
-                            "search_behavior": behavior_map[behavior_text], 
-                            "trust_level": trust_map[trust_text], 
-                            "knowledge_p1_fx": knowledge_map[know_p1_text], 
-                            "knowledge_p2_eu": knowledge_map[know_p2_text], 
-                            "feedback": suspicion
-                        })
-                    
-                    new_data = pd.DataFrame(st.session_state.decisions)
-                    updated_df = pd.concat([existing_data, new_data], ignore_index=True)
-                    
-                    conn.update(worksheet="Sheet1", data=updated_df)
-                except Exception as e:
-                    st.toast("数据同步可能出现延迟，但不影响您的实验进程。", icon="⚠️")
-                    print(e)
+        if st.form_submit_button("封存数据并查看真相", type="primary"):
+            # 【此处可接入写入 Google Sheets 或 CSV 的逻辑】
+            # 目前我们在前端打印出 JSON 供查阅验证
             
-            st.session_state.step = "debrief"
+            final_payload = {
+                "user_profile": st.session_state.user_data,
+                "decisions": st.session_state.results,
+                "survey": {"knowledge_sinosure": k_p1, "knowledge_cbam": k_p2, "feedback": feedback},
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            st.session_state.final_payload = final_payload
+            st.session_state.step = "finish"
             st.rerun()
 
-# --- 8. 步骤 6：真相告知 ---
-elif st.session_state.step == "debrief":
+# --- 步骤 5：感谢页与数据回显 ---
+elif st.session_state.step == "finish":
     st.balloons()
-    st.title("🎉 沙盘演练已完成，非常感谢您的参与！")
+    st.title("🎉 感谢您的参与！")
+    st.markdown("您的所有决策数据已成功加密封存。")
     
-    with st.expander("🎓 关于本研究的机密说明 (点击展开)", expanded=True):
-        st.write("""
-        本研究旨在评估各类受试群体在面对 Agentic-AI 时的‘信任校准’机制。
-        **为了测试极限情况，部分 AI 建议（如埃及项目中的汇兑损失预警）是我们故意植入的逻辑幻觉，因为项目本身是离岸美元计价的。**
-        
-        您的直觉判断和研判依据将对我们探索【可信工业 AI】的治理框架提供极大的帮助。
-        为了不影响后续同仁的判断，**请对以上陷阱细节保密**。
+    with st.expander("揭晓真相 (实验设计解析)"):
+        st.markdown("""
+        **本研究旨在探究高压商业环境下的“人机信任博弈”：**
+        * **项目1 (信保)**：AI 实际上产生了**幻觉 (Automation Bias 测试)**。它过度放大了 5% 的微观敞口，试图掩盖信保 95% 的宏观安全垫。如果您看破了底牌并推翻了 AI，恭喜您，您的商业直觉战胜了算法恐吓！
+        * **项目2 (绿氢)**：AI 给出了**真知 (Algorithm Aversion 测试)**。35% 的利润是诱饵，不足 10% 成功率的绿证抵扣是死胡同。如果您克制住了贪婪，顺从了 AI 的预警，说明您具备顶级的合规风险嗅觉！
         """)
-    
-    st.success("您的数据已加密上传完毕。现在您可以安全地关闭此窗口了。祝您生活愉快！")
+        
+    st.caption("👇 以下为您本次实验生成的后台数据（仅供测试期查阅，正式版可隐藏）")
+    st.json(st.session_state.final_payload)
