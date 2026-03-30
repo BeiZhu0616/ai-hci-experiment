@@ -5,7 +5,7 @@ import time
 import random
 from streamlit_gsheets import GSheetsConnection
 
-# --- 0. 防敷衍与防乱填校验函数 (保留您的精髓) ---
+# --- 0. 防敷衍与防乱填校验函数 ---
 def check_rationale_quality(text):
     text = text.strip()
     if len(text) == 0: return False, "请输入支撑您研判的核心依据。"
@@ -17,8 +17,9 @@ def check_rationale_quality(text):
     if any(word in text for word in blacklist): return False, "请提供具体的业务或技术依据，避免使用无意义词汇。"
     return True, ""
 
-def check_demographics(org, dept, pos):
-    for field_name, value in [("企业/机构", org), ("部门/中心", dept), ("当前职位", pos)]:
+# 校验手填的企业和部门，防止乱填
+def check_demographics(org, dept):
+    for field_name, value in [("企业/机构全称", org), ("部门/中心", dept)]:
         val = value.strip()
         if len(val) < 2: return False, f"[{field_name}] 信息过短，请填写真实全称。"
         if val.isdigit(): return False, f"[{field_name}] 请勿输入纯数字。"
@@ -26,7 +27,7 @@ def check_demographics(org, dept, pos):
         if val in ["不知道", "测试", "无", "随便", "111"]: return False, f"[{field_name}] 请填写有效信息。"
     return True, ""
 
-# --- 1. 配置与统一项目库 (最终终极版：保留陷阱与灰度) ---
+# --- 1. 配置与统一项目库 ---
 UNIVERSAL_PROJECTS = [
     {
         "id": "P1", 
@@ -82,7 +83,7 @@ if st.session_state.step == "intro":
             st.session_state.step = "login"
             st.rerun()
 
-# --- 4. 步骤 2：专家画像登记 (修复了表单字段与写入字段的映射) ---
+# --- 4. 步骤 2：专家画像登记 (🔥 完美恢复细颗粒度画像) ---
 elif st.session_state.step == "login":
     st.title("📋 决策者专业背景建档")
     st.caption("为保证研究的生态效度，请准确勾选您的职业画像（数据严格匿名保密）。")
@@ -91,44 +92,72 @@ elif st.session_state.step == "login":
         u_id = st.text_input("受试者代号 / 昵称 (选填)", placeholder="例: SUB-01")
         
         st.markdown("##### 🏢 您的职业坐标")
-        organization = st.text_input("所属企业 / 机构 (必填)", placeholder="例: 某大型新能源企业 / 某投资机构")
-        department = st.text_input("所属部门 / 中心 (必填)", placeholder="例: 战略投资部 / 采购中心")
-        position = st.text_input("当前职位 (必填)", placeholder="例: 高级投资经理 / 业务总监")
-        
-        st.markdown("##### 🎓 企业属性与技术环境")
-        col_t, col_a = st.columns(2)
-        with col_t:
-            enterprise_type = st.selectbox("企业所有制性质", [
-                "民营企业 (含民营控股)", "国有企业 / 央企", 
-                "中外合资 / 外商独资", "金融 / 投资机构", "其他"
+        col_o, col_d = st.columns(2)
+        with col_o:
+            organization = st.text_input("所属企业/机构全称 (必填)", placeholder="例: 某大型新能源企业")
+        with col_d:
+            department = st.text_input("所属部门/中心 (必填)", placeholder="例: 战略投资部")
+
+        col_f, col_l = st.columns(2)
+        with col_f:
+            job_function = st.selectbox("核心业务职能 (必填)", [
+                "投资 / 并购 / 融资", "项目管理 / 工程建设", "风控 / 法务 / 合规", 
+                "战略 / 行业研究", "供应链 / 采购", "产品 / 技术研发", "其他核心业务"
             ])
-        with col_a:
-            ai_usage = st.selectbox("日常生成式 AI 使用频率", [
-                "几乎不用", "偶尔使用", "经常使用", "重度依赖"
+        with col_l:
+            management_level = st.selectbox("当前管理层级 (必填)", [
+                "初级执行 / 专员 (Junior)", "中级骨干 / 资深专员 (Senior Specialist)", 
+                "部门主管 / 经理 (Manager/Lead)", "高管 / 核心决策层 (Director/C-Level)"
+            ])
+        
+        # 💡 核心变量：从业年限
+        experience_years = st.slider("相关领域总从业年限 (含过往经历)", min_value=0, max_value=40, value=5, step=1)
+        
+        st.markdown("##### 🎓 个人背景与环境")
+        col_e, col_t = st.columns(2)
+        with col_e:
+            education = st.selectbox("最高学历", ["本科", "硕士", "博士", "其他"])
+        with col_t:
+            enterprise_type = st.selectbox("当前所在企业所有制性质", [
+                "民营企业 (含民营控股出海企业)", "国有企业 / 央企 (含地方国资平台)", 
+                "中外合资 / 外商独资 (MNC)", "金融 / 投资机构", "其他"
             ])
             
-        if st.form_submit_button("保存信息并进入沙盘", type="primary"):
-            is_valid, error_msg = check_demographics(organization, department, position)
+        col_g, col_a = st.columns(2)
+        with col_g:
+            gender = st.selectbox("性别", ["男", "女", "不愿透露"])
+        with col_a:
+            ai_usage = st.selectbox("日常生成式 AI 使用频率", [
+                "几乎不用", "偶尔使用 (每月几次)", "经常使用 (每周几次)", "重度依赖 (几乎每天)"
+            ])
+        birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1990, step=1)
+            
+        if st.form_submit_button("保存档案并进入沙盘", type="primary"):
+            # 手填部分的防乱填校验
+            is_valid, error_msg = check_demographics(organization, department)
             
             if not is_valid:
                 st.error(f"⚠️ 信息填写不规范：{error_msg}")
             else:
-                exp_group = random.choice(["control", "treatment"])
                 st.session_state.user_data = {
-                    "id": u_id if u_id else "Anonymous",
-                    "organization": organization, 
-                    "department": department, 
-                    "position": position, 
+                    "id": u_id if u_id else "Anonymous", 
+                    "organization": organization,
+                    "department": department,
+                    "job_function": job_function,
+                    "management_level": management_level, 
+                    "experience_years": experience_years, # 恢复入库
+                    "education": education,               # 恢复入库
                     "enterprise_type": enterprise_type,
-                    "ai_usage": ai_usage, 
-                    "group": exp_group
+                    "gender": gender,                     # 恢复入库
+                    "birth_year": birth_year,             # 恢复入库
+                    "ai_usage": ai_usage,
+                    "group": random.choice(["control", "treatment"])
                 }
-                
                 projects = UNIVERSAL_PROJECTS.copy()
                 random.shuffle(projects) 
                 st.session_state.active_projects = projects
                 
-                # 💡 修复：正确路由到隔离页
+                # 💡 修复断链：进入前置规则洗脑页，而不是不存在的 task 页
                 st.session_state.step = "pre_task_briefing"
                 st.rerun()
 
@@ -171,7 +200,6 @@ elif st.session_state.step == "experiment":
         st.progress((idx + 1) / len(active_projects))
         st.header(f"项目 {idx+1}/{len(active_projects)}: {p['title']}")
         
-        # 【黑匣子初始化】
         if f"tracker_init_{idx}" not in st.session_state:
             st.session_state[f"first_decision_time_{idx}"] = None
             st.session_state[f"pure_think_captured_{idx}"] = False
@@ -185,7 +213,6 @@ elif st.session_state.step == "experiment":
         with st.container(border=True):
             st.info(p['detail'])
             
-            # 【序贯揭示】：按钮控制AI出场
             if not st.session_state.get(f"ai_called_{idx}", False):
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🤖 我已初步审阅，申请 Agent 介入辅助研判", type="primary", use_container_width=True):
@@ -201,7 +228,6 @@ elif st.session_state.step == "experiment":
                 
                 st.markdown("---")
                 
-                # 【可选探针】：调取隐藏底牌
                 if not st.session_state.get(f"viewed_data_{idx}", False):
                     if st.button("📄 [可选操作] 调取底层尽调参数进行人工核对"):
                         st.session_state[f"viewed_data_{idx}"] = True
@@ -230,7 +256,6 @@ elif st.session_state.step == "experiment":
                     
                     if not st.session_state.get(f"rationale_locked_{idx}", False):
                         if st.button("🔒 确认依据并解锁决策选项"):
-                            # 调用您的终极防敷衍函数
                             is_valid, error_msg = check_rationale_quality(rationale)
                             if not is_valid:
                                 st.session_state[f"validation_block_count_{idx}"] += 1
@@ -254,7 +279,6 @@ elif st.session_state.step == "experiment":
                         st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
                         st.session_state[f"pure_think_captured_{idx}"] = True
                 
-                # 记录决策摇摆
                 if decision and decision != "(请选择)" and decision != st.session_state[f"last_recorded_dec_{idx}"]:
                     elapsed = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
                     st.session_state[f"action_log_{idx}"].append(f"[{elapsed}s] 选:{decision[:2]}")
@@ -273,16 +297,22 @@ elif st.session_state.step == "experiment":
                         st.session_state[f"action_log_{idx}"].append(f"[{round(total_reaction_time,1)}s] 提交")
                         final_log_str = " -> ".join(st.session_state[f"action_log_{idx}"])
                         
+                        # 💡 确保所有细化标签完整落库
                         row = {
                             "subject_id": st.session_state.user_data['id'],
                             "experiment_group": st.session_state.user_data['group'],
                             "organization": st.session_state.user_data['organization'],
                             "department": st.session_state.user_data['department'],
-                            "position": st.session_state.user_data['position'],
+                            "job_function": st.session_state.user_data['job_function'],
+                            "management_level": st.session_state.user_data['management_level'],
+                            "experience_years": st.session_state.user_data['experience_years'],
+                            "education": st.session_state.user_data['education'],
                             "enterprise_type": st.session_state.user_data['enterprise_type'],
+                            "gender": st.session_state.user_data['gender'],
+                            "birth_year": st.session_state.user_data['birth_year'],
                             "ai_usage": st.session_state.user_data['ai_usage'],
                             "p_id": p['id'],
-                            "display_order": idx + 1,
+                            "display_order": idx + 1, 
                             "is_faulty_ai": p['is_faulty'],
                             "user_decision": 1 if decision == "批准项目" else 0,
                             "confidence": conf,
