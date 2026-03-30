@@ -82,7 +82,7 @@ if st.session_state.step == "intro":
             st.session_state.step = "login"
             st.rerun()
 
-# --- 步骤 2：专家画像登记 ---
+# --- 4. 步骤 2：专家画像登记 (修复了表单字段与写入字段的映射) ---
 elif st.session_state.step == "login":
     st.title("📋 决策者专业背景建档")
     st.caption("为保证研究的生态效度，请准确勾选您的职业画像（数据严格匿名保密）。")
@@ -91,51 +91,47 @@ elif st.session_state.step == "login":
         u_id = st.text_input("受试者代号 / 昵称 (选填)", placeholder="例: SUB-01")
         
         st.markdown("##### 🏢 您的职业坐标")
-        col_f, col_l = st.columns(2)
-        with col_f:
-            job_function = st.selectbox("核心业务职能 (必填)", [
-                "投资 / 并购 / 融资", "项目管理 / 工程建设", "风控 / 法务 / 合规", 
-                "战略 / 行业研究", "供应链 / 采购", "产品 / 技术研发", "其他核心业务"
-            ])
-        with col_l:
-            management_level = st.selectbox("当前管理层级 (必填)", [
-                "初级执行 / 专员 (Junior)", "中级骨干 / 资深专员 (Senior Specialist)", 
-                "部门主管 / 经理 (Manager/Lead)", "高管 / 核心决策层 (Director/C-Level)"
-            ])
-        experience_years = st.slider("相关领域总从业年限 (含过往经历)", min_value=0, max_value=40, value=5, step=1)
+        organization = st.text_input("所属企业 / 机构 (必填)", placeholder="例: 某大型新能源企业 / 某投资机构")
+        department = st.text_input("所属部门 / 中心 (必填)", placeholder="例: 战略投资部 / 采购中心")
+        position = st.text_input("当前职位 (必填)", placeholder="例: 高级投资经理 / 业务总监")
         
-        st.markdown("##### 🎓 个人背景与环境")
-        col_e, col_t = st.columns(2)
-        with col_e:
-            education = st.selectbox("最高学历", ["本科", "硕士", "博士", "其他"])
+        st.markdown("##### 🎓 企业属性与技术环境")
+        col_t, col_a = st.columns(2)
         with col_t:
-            enterprise_type = st.selectbox("当前所在企业所有制性质", [
-                "民营企业 (含民营控股出海企业)", "国有企业 / 央企 (含地方国资平台)", 
-                "中外合资 / 外商独资 (MNC)", "金融 / 投资机构", "其他"
+            enterprise_type = st.selectbox("企业所有制性质", [
+                "民营企业 (含民营控股)", "国有企业 / 央企", 
+                "中外合资 / 外商独资", "金融 / 投资机构", "其他"
             ])
-            
-        col_g, col_a = st.columns(2)
-        with col_g:
-            gender = st.selectbox("性别", ["男", "女", "不愿透露"])
         with col_a:
             ai_usage = st.selectbox("日常生成式 AI 使用频率", [
-                "几乎不用", "偶尔使用 (每月几次)", "经常使用 (每周几次)", "重度依赖 (几乎每天)"
+                "几乎不用", "偶尔使用", "经常使用", "重度依赖"
             ])
-        birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1990, step=1)
             
-        if st.form_submit_button("保存档案并进入沙盘", type="primary"):
-            st.session_state.user_data = {
-                "id": u_id if u_id else "Anonymous", "job_function": job_function,
-                "management_level": management_level, "experience_years": experience_years,
-                "education": education, "enterprise_type": enterprise_type,
-                "gender": gender, "birth_year": birth_year, "ai_usage": ai_usage,
-                "group": random.choice(["control", "treatment"]) # 随机分组
-            }
-            projects = UNIVERSAL_PROJECTS.copy()
-            random.shuffle(projects) # 随机顺序
-            st.session_state.active_projects = projects
-            st.session_state.step = "task"
-            st.rerun()
+        if st.form_submit_button("保存信息并进入沙盘", type="primary"):
+            is_valid, error_msg = check_demographics(organization, department, position)
+            
+            if not is_valid:
+                st.error(f"⚠️ 信息填写不规范：{error_msg}")
+            else:
+                exp_group = random.choice(["control", "treatment"])
+                st.session_state.user_data = {
+                    "id": u_id if u_id else "Anonymous",
+                    "organization": organization, 
+                    "department": department, 
+                    "position": position, 
+                    "enterprise_type": enterprise_type,
+                    "ai_usage": ai_usage, 
+                    "group": exp_group
+                }
+                
+                projects = UNIVERSAL_PROJECTS.copy()
+                random.shuffle(projects) 
+                st.session_state.active_projects = projects
+                
+                # 💡 修复：正确路由到隔离页
+                st.session_state.step = "pre_task_briefing"
+                st.rerun()
+
 # --- 5. 步骤 3：全新隔离页 (实验前强洗脑铁律) ---
 elif st.session_state.step == "pre_task_briefing":
     if 'briefing_start_time' not in st.session_state:
@@ -226,7 +222,7 @@ elif st.session_state.step == "experiment":
                 # 💥 实验组：强制先写理由并锁定
                 if is_treatment_group:
                     st.markdown("**📝 第一步：列明您的核心决策依据（必填）**")
-                    rationale = st.text_area("在做出最终决策前，请基于您已查阅的信息，写下您评估该项目的最核心依据（至少 1 条，可引用界面中的具体数据、AI 分析或隐藏信息）（点击下方按钮校验）：", key=f"rationale_{idx}", height=100)
+                    rationale = st.text_area("在做出最终决策前，请基于您已查阅的信息，写下您评估该项目的最核心依据（至少 1 条，可引用界面数据、AI 分析或隐藏信息）（输入后点击下方按钮校验）：", key=f"rationale_{idx}", height=100)
                     
                     if len(rationale) > 0 and not st.session_state[f"pure_think_captured_{idx}"]:
                         st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
@@ -286,7 +282,7 @@ elif st.session_state.step == "experiment":
                             "enterprise_type": st.session_state.user_data['enterprise_type'],
                             "ai_usage": st.session_state.user_data['ai_usage'],
                             "p_id": p['id'],
-                            "display_order": idx + 1, # 💡 记录顺序效应变量
+                            "display_order": idx + 1,
                             "is_faulty_ai": p['is_faulty'],
                             "user_decision": 1 if decision == "批准项目" else 0,
                             "confidence": conf,
@@ -337,7 +333,6 @@ elif st.session_state.step == "survey":
         if st.form_submit_button("封存数据并查看真相", type="primary"):
             with st.spinner("正在安全连接数据库回传数据，请稍候..."):
                 try:
-                    # 🚀 调用您配置好的 GSheetsConnection
                     conn = st.connection("gsheets", type=GSheetsConnection)
                     try:
                         existing_data = conn.read(worksheet="Sheet1", ttl=0) 
@@ -345,7 +340,6 @@ elif st.session_state.step == "survey":
                     except:
                         existing_data = pd.DataFrame()
                         
-                    # 为每一行补充 Survey 数据
                     for d in st.session_state.decisions:
                         d.update({
                             "search_behavior": behavior_map[behavior_text], 
@@ -358,7 +352,6 @@ elif st.session_state.step == "survey":
                     new_data = pd.DataFrame(st.session_state.decisions)
                     updated_df = pd.concat([existing_data, new_data], ignore_index=True)
                     
-                    # 更新表格
                     conn.update(worksheet="Sheet1", data=updated_df)
                 except Exception as e:
                     st.toast("数据同步可能出现延迟，但不影响您的实验进程。", icon="⚠️")
