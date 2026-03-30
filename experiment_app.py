@@ -90,6 +90,7 @@ elif st.session_state.step == "login":
     with st.form("user_info_form"):
         u_id = st.text_input("受试者代号 / 昵称 (选填)", placeholder="例: SUB-01")
         
+        st.markdown("##### 🏢 您的职业坐标")
         col_f, col_l = st.columns(2)
         with col_f:
             job_function = st.selectbox("核心业务职能 (必填)", [
@@ -98,11 +99,12 @@ elif st.session_state.step == "login":
             ])
         with col_l:
             management_level = st.selectbox("当前管理层级 (必填)", [
-                "初级执行 / 专员", "中级骨干 / 资深专员", 
-                "部门主管 / 经理", "高管 / 核心决策层"
+                "初级执行 / 专员 (Junior)", "中级骨干 / 资深专员 (Senior Specialist)", 
+                "部门主管 / 经理 (Manager/Lead)", "高管 / 核心决策层 (Director/C-Level)"
             ])
-        experience_years = st.slider("相关领域总从业年限 (含过往经历)", 0, 40, 5)
+        experience_years = st.slider("相关领域总从业年限 (含过往经历)", min_value=0, max_value=40, value=5, step=1)
         
+        st.markdown("##### 🎓 个人背景与环境")
         col_e, col_t = st.columns(2)
         with col_e:
             education = st.selectbox("最高学历", ["本科", "硕士", "博士", "其他"])
@@ -119,21 +121,21 @@ elif st.session_state.step == "login":
             ai_usage = st.selectbox("日常生成式 AI 使用频率", [
                 "几乎不用", "偶尔使用 (每月几次)", "经常使用 (每周几次)", "重度依赖 (几乎每天)"
             ])
+        birth_year = st.number_input("出生年份", min_value=1950, max_value=2010, value=1990, step=1)
             
         if st.form_submit_button("保存档案并进入沙盘", type="primary"):
             st.session_state.user_data = {
                 "id": u_id if u_id else "Anonymous", "job_function": job_function,
                 "management_level": management_level, "experience_years": experience_years,
                 "education": education, "enterprise_type": enterprise_type,
-                "gender": gender, "ai_usage": ai_usage,
-                "group": random.choice(["control", "treatment"]) 
+                "gender": gender, "birth_year": birth_year, "ai_usage": ai_usage,
+                "group": random.choice(["control", "treatment"]) # 随机分组
             }
             projects = UNIVERSAL_PROJECTS.copy()
-            random.shuffle(projects) 
+            random.shuffle(projects) # 随机顺序
             st.session_state.active_projects = projects
             st.session_state.step = "task"
             st.rerun()
-
 # --- 5. 步骤 3：全新隔离页 (实验前强洗脑铁律) ---
 elif st.session_state.step == "pre_task_briefing":
     if 'briefing_start_time' not in st.session_state:
