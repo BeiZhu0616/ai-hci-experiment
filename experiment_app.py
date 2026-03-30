@@ -248,7 +248,7 @@ elif st.session_state.step == "experiment":
                 # 💥 实验组：强制先写理由并锁定
                 if is_treatment_group:
                     st.markdown("**📝 第一步：列明您的核心决策依据（必填）**")
-                    rationale = st.text_area("在做出最终决策前，请基于您已查阅的信息，写下您评估该项目的最核心依据（至少 1 条，可引用界面数据、AI 分析或隐藏信息）（输入后点击下方按钮校验）：", key=f"rationale_{idx}", height=100)
+                    rationale = st.text_area("在做出最终决策前，请基于您目前掌握的所有资料（含各版块详情），写下支撑您研判的最核心依据（输入后点击下方按钮校验）：", key=f"rationale_{idx}", height=100)
                     
                     if len(rationale) > 0 and not st.session_state[f"pure_think_captured_{idx}"]:
                         st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
