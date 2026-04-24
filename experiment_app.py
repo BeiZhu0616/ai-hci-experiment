@@ -274,6 +274,9 @@ elif st.session_state.step == "experiment":
 
                         elapsed = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
                         st.session_state[f"action_log_{idx}"].append(f"[{elapsed}s] 查阅底牌")
+
+                        st.session_state[f"ui_refresh_{idx}"] = time.time()   # ⭐关键补丁
+
                         st.rerun()
                 else:
                     st.success("**✅ 底层尽调参数已调取：**")
@@ -327,7 +330,8 @@ elif st.session_state.step == "experiment":
                     #if decision != "(请选择)" and not st.session_state[f"pure_think_captured_{idx}"]:
                     #    st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
                     #    st.session_state[f"pure_think_captured_{idx}"] = True
-                
+
+                _ = st.session_state.get(f"ui_refresh_{idx}") # 触发 UI 刷新，确保时间记录准确
                 if decision and decision != "(请选择)" and decision != st.session_state[f"last_recorded_dec_{idx}"]:
                     elapsed = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
                     st.session_state[f"action_log_{idx}"].append(f"[{elapsed}s] 选:{decision[:2]}")
