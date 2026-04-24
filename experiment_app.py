@@ -4,6 +4,7 @@ import datetime
 import time
 import random
 import uuid
+import json
 from streamlit_gsheets import GSheetsConnection
 
 
@@ -106,12 +107,14 @@ elif st.session_state.step == "login":
         with col_d:
             # 部门是单一公司研究的核心变量
             # 建议将部门按照职能逻辑排序，并在后台对应一个"职能类别"标签
+            #主分析：用 department
+            #robustness check：用 job_function
             DEPT_OPTIONS = [
-               "--- 核心决策与管理 ---",
+               #"--- 核心决策与管理 ---",
                "战略投资部", "中后台管理", "财务/资金管理部",
-               "--- 风险与合规审查 ---",
+               #"--- 风险与合规审查 ---",
                "风险管理/合规部", "风险审查/法律", "财务审计",
-               "--- 前端业务与工程 ---",
+               #"--- 前端业务与工程 ---",
                "新能源事业部", "项目开发/商务", "工程技术中心", "工程技术/QA",
                "其他"
            ]
@@ -133,7 +136,12 @@ elif st.session_state.step == "login":
         
         # 💡 核心变量：从业年限
         experience_years = st.slider("相关领域总从业年限 (含过往经历)", min_value=0, max_value=40, value=5, step=1)
-        
+
+        decision_role = st.selectbox("您是否参与过类似投资/采购决策？", [
+            "直接决策",
+            "提供建议",
+            "不参与"
+        ])
         st.markdown("##### 🎓 个人背景与环境")
         col_e, col_t = st.columns(2)
         with col_e:
@@ -168,7 +176,8 @@ elif st.session_state.step == "login":
                     "organization": organization,
                     "department": department,
                     "job_function": job_function,
-                    "management_level": management_level, 
+                    "management_level": management_level,
+                    "decision_role": decision_role, 
                     "experience_years": experience_years, # 恢复入库
                     "education": education,               # 恢复入库
                     "enterprise_type": enterprise_type,
@@ -428,6 +437,7 @@ elif st.session_state.step == "experiment":
                             "department": st.session_state.user_data['department'],
                             "job_function": st.session_state.user_data['job_function'],
                             "management_level": st.session_state.user_data['management_level'],
+                            "decision_role": st.session_state.user_data["decision_role"],
                             "experience_years": st.session_state.user_data['experience_years'],
                             "education": st.session_state.user_data['education'],
                             "enterprise_type": st.session_state.user_data['enterprise_type'],
@@ -450,10 +460,11 @@ elif st.session_state.step == "experiment":
                             "viewed_data": st.session_state.get(f"viewed_data_{idx}", False),
                             #"action_log": final_log_str,
                             #"interaction_order": order_tag,  # 关键学术指标：时序标签
-                            "view_to_input_gap_s": round(i_time - v_time, 2) if (v_time and i_time) else None, # 间隔时长
+                            #"view_to_input_gap_s": round(i_time - v_time, 2) if (v_time and i_time) else None, # 间隔时长
+                            "view_to_input_gap_s": (round(abs(i_time - v_time), 2) if (v_time is not None and i_time is not None) else None),   
                             "action_log": " -> ".join(st.session_state[f"action_log_{idx}"]),
                             #"action_log_list": st.session_state[f"action_log_{idx}"],
-                            "action_log_list": str(st.session_state[f"action_log_{idx}"]),
+                            "action_log_list": json.dumps(st.session_state[f"action_log_{idx}"]),
                             "interaction_order": interaction_order,              # 带时间
                             "interaction_order_simple": interaction_order_simple, # 纯顺序
                             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
