@@ -288,7 +288,7 @@ elif st.session_state.step == "experiment":
                 st.markdown("### ⚖️ 做出您的最终决策")
                 
                 rationale = ""
-                decision = None
+                current_decision = None  # ⭐ 初始化，避免后续 NameError
 
                 # 💥 实验组：强制先写理由并锁定
                 if is_treatment_group:
@@ -320,6 +320,10 @@ elif st.session_state.step == "experiment":
                     if st.session_state.get(f"rationale_locked_{idx}", False):
                         st.success("✅ 依据校验通过，请执行决策：")
                         current_decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
+                        
+                        # ⭐ 关键改动：锁定用户已选决策（只要选过一次就记住）
+                        if current_decision != "(请选择)":
+                            st.session_state[f"final_decision_{idx}"] = current_decision
                 
                 # 💨 对照组：直接点选
                 else:
@@ -328,23 +332,23 @@ elif st.session_state.step == "experiment":
                     
                     if current_decision != "(请选择)" and st.session_state[f"first_rationale_input_time_{idx}"] is None:
                         st.session_state[f"first_rationale_input_time_{idx}"] = time.time()
-                
-                # ⭐ 关键改动：锁定用户已选决策（只要选过一次就记住）
-                if current_decision != "(请选择)":
-                    st.session_state[f"final_decision_{idx}"] = current_decision
+                    
+                    # ⭐ 关键改动：锁定用户已选决策（只要选过一次就记住）
+                    if current_decision != "(请选择)":
+                        st.session_state[f"final_decision_{idx}"] = current_decision
                 
                 # ⭐ 用于后续控制判断
                 decision = current_decision
                 final_decision = st.session_state.get(f"final_decision_{idx}")
-                    #if decision != "(请选择)" and not st.session_state[f"pure_think_captured_{idx}"]:
-                    #    st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
-                    #    st.session_state[f"pure_think_captured_{idx}"] = True
+                #if decision != "(请选择)" and not st.session_state[f"pure_think_captured_{idx}"]:
+                #    st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
+                #    st.session_state[f"pure_think_captured_{idx}"] = True
 
                 _ = st.session_state.get(f"ui_refresh_{idx}") # 触发 UI 刷新，确保时间记录准确
                 
                 # ⭐ 修正 change_count 触发逻辑：只在"真实切换"时才计数
                 last = st.session_state.get(f"last_recorded_dec_{idx}")
-                if current_decision != "(请选择)" and current_decision != last:
+                if current_decision is not None and current_decision != "(请选择)" and current_decision != last:
                     elapsed = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
                     st.session_state[f"action_log_{idx}"].append(f"[{elapsed}s] 选:{current_decision[:2]}")
                     if last is not None:
