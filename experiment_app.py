@@ -245,6 +245,7 @@ elif st.session_state.step == "experiment":
             st.session_state[f"decision_change_count_{idx}"] = 0
             st.session_state[f"validation_block_count_{idx}"] = 0
             st.session_state[f"action_log_{idx}"] = []
+            st.session_state[f"final_decision_{idx}"] = None  # ⭐ 锁定用户真实决策
             st.session_state[f"tracker_init_{idx}"] = True
             
         with st.container(border=True):
@@ -318,28 +319,40 @@ elif st.session_state.step == "experiment":
                     
                     if st.session_state.get(f"rationale_locked_{idx}", False):
                         st.success("✅ 依据校验通过，请执行决策：")
-                        decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
+                        current_decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
                 
                 # 💨 对照组：直接点选
                 else:
-                    decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
+                    current_decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
                     rationale = "N/A (Control)"
                     
-                    if decision != "(请选择)" and st.session_state[f"first_rationale_input_time_{idx}"] is None:
+                    if current_decision != "(请选择)" and st.session_state[f"first_rationale_input_time_{idx}"] is None:
                         st.session_state[f"first_rationale_input_time_{idx}"] = time.time()
+                
+                # ⭐ 关键改动：锁定用户已选决策（只要选过一次就记住）
+                if current_decision != "(请选择)":
+                    st.session_state[f"final_decision_{idx}"] = current_decision
+                
+                # ⭐ 用于后续控制判断
+                decision = current_decision
+                final_decision = st.session_state.get(f"final_decision_{idx}")
                     #if decision != "(请选择)" and not st.session_state[f"pure_think_captured_{idx}"]:
                     #    st.session_state[f"pure_think_s_{idx}"] = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
                     #    st.session_state[f"pure_think_captured_{idx}"] = True
 
                 _ = st.session_state.get(f"ui_refresh_{idx}") # 触发 UI 刷新，确保时间记录准确
-                if decision and decision != "(请选择)" and decision != st.session_state[f"last_recorded_dec_{idx}"]:
-                    elapsed = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
-                    st.session_state[f"action_log_{idx}"].append(f"[{elapsed}s] 选:{decision[:2]}")
-                    if st.session_state[f"last_recorded_dec_{idx}"] is not None:
-                        st.session_state[f"decision_change_count_{idx}"] += 1
-                    st.session_state[f"last_recorded_dec_{idx}"] = decision
                 
-                if decision and decision != "(请选择)":
+                # ⭐ 修正 change_count 触发逻辑：只在"真实切换"时才计数
+                last = st.session_state.get(f"last_recorded_dec_{idx}")
+                if current_decision != "(请选择)" and current_decision != last:
+                    elapsed = round(time.time() - st.session_state[f"first_decision_time_{idx}"], 1)
+                    st.session_state[f"action_log_{idx}"].append(f"[{elapsed}s] 选:{current_decision[:2]}")
+                    if last is not None:
+                        st.session_state[f"decision_change_count_{idx}"] += 1
+                    st.session_state[f"last_recorded_dec_{idx}"] = current_decision
+                
+                # ⭐ 改动：用"锁定值"控制提交按钮显示（不受 rerun 影响）
+                if final_decision:
                     conf = st.slider("决策信心评分 (1-10):", 1, 10, 5, key=f"conf_{idx}")
                     
                     if st.button("提交决策并继续", type="primary"):
@@ -452,7 +465,7 @@ elif st.session_state.step == "experiment":
                             "p_id": p['id'],
                             "display_order": idx + 1, 
                             "is_faulty_ai": p['is_faulty'],
-                            "user_decision": 1 if decision == "批准项目" else 0,
+                            "user_decision": 1 if final_decision == "批准项目" else 0,  # ⭐ 用锁定值取值
                             "confidence": conf,
                             "rationale_text": rationale,
                             "total_dwell_s": round(total_dwell_time, 2),
