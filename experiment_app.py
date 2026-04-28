@@ -447,18 +447,51 @@ elif st.session_state.step == "experiment":
                         is_expert_match = 1 if current_dept in expert_list else 0
 
                         # ⭐⭐⭐ 新增：计算决策时间和行为分类 ⭐⭐⭐
-                        # 从 action_log 中提取决策时间（找第一个"选:"事件）
-                        decision_made_time = None
+                        # 从 action_log 中提取决策时间（找所有"选:"事件，取最后一个作为最终决策）
+                        first_choice_time = None
+                        final_choice_time = None
+                        base_time = st.session_state.get(f"first_decision_time_{idx}")
                         action_log_list = st.session_state[f"action_log_{idx}"]
                         for event in action_log_list:
                             if '选:' in event:
-                                # 从 "[158.1s] 选:批准" 中解析时间
                                 try:
                                     time_str = event.split(']')[0].replace('[', '').replace('s', '')
-                                    decision_made_time = float(time_str)
+                                    relative_time = float(time_str)
+                                    abs_time = base_time + relative_time
+                                    if first_choice_time is None:
+                                        first_choice_time = abs_time
+                                    final_choice_time = abs_time
                                 except:
-                                    decision_made_time = None
-                                break
+                                    pass
+                        
+                        decision_made_time = final_choice_time
+                        stabilization_time = (final_choice_time - first_choice_time) if (first_choice_time and final_choice_time) else None
+                        
+                        # 🧩 新增：决策承诺时间和前后事件
+                        decision_commit_time = first_choice_time
+                        pre_commit_events = []
+                        post_commit_events = []
+                        for event in action_log_list:
+                            try:
+                                event_time = float(event.split(']')[0].replace('[', '').replace('s', ''))
+                            except:
+                                continue
+                            
+                            if decision_commit_time and event_time < decision_commit_time:
+                                if '呼叫AI' in event and 'AI' not in pre_commit_events:
+                                    pre_commit_events.append('AI')
+                                elif '撰写理由' in event or '开始撰写' in event and 'Reason' not in pre_commit_events:
+                                    pre_commit_events.append('Reason')
+                                elif '查阅底牌' in event or '查阅' in event and 'Info' not in pre_commit_events:
+                                    pre_commit_events.append('Info')
+                            elif decision_commit_time and event_time >= decision_commit_time:
+                                if '撰写理由' in event or '开始撰写' in event and 'Reason' not in post_commit_events:
+                                    post_commit_events.append('Reason')
+                                elif '查阅底牌' in event or '查阅' in event and 'Info' not in post_commit_events:
+                                    post_commit_events.append('Info')
+                        
+                        pre_commit_events_str = ' → '.join(pre_commit_events) if pre_commit_events else 'N/A'
+                        post_commit_events_str = ' → '.join(post_commit_events) if post_commit_events else 'N/A'
                         
                         # 🧩 计算 1：interaction_order_clean（仅决策前的交互序列）
                         pre_decision_behaviors = []
@@ -484,11 +517,18 @@ elif st.session_state.step == "experiment":
                         
                         interaction_order_clean = ' → '.join(pre_decision_behaviors) if pre_decision_behaviors else 'N/A'
                         
+                        # 🧩 新增：标准研究变量
+                        interaction_order_pre = interaction_order_clean
+                        interaction_order_full = interaction_order
+                        
                         # 🧩 计算 2：post_decision_info（是否在决策后查看信息）
                         post_decision_info = 0
                         if decision_made_time and v_time:
                             if v_time > decision_made_time:
                                 post_decision_info = 1
+                        
+                        # 🧩 新增：robustness check
+                        post_decision_info_strict = 1 if (v_time and decision_made_time and v_time > decision_made_time + 1.0) else 0
                         
                         # 🧩 计算 3：post_decision_info_delay_s（决策到查看的延迟）
                         post_decision_info_delay_s = None
@@ -497,6 +537,17 @@ elif st.session_state.step == "experiment":
 
                         st.session_state[f"action_log_{idx}"].append(f"[{round(total_reaction_time,1)}s] 提交")
                         final_log_str = " -> ".join(st.session_state[f"action_log_{idx}"])
+                        
+                        # 🧩 新增：结构化日志
+                        action_log_struct = []
+                        for event in action_log_list:
+                            try:
+                                time_str = event.split(']')[0].replace('[', '').replace('s', '')
+                                relative_time = float(time_str)
+                                event_desc = event.split('] ')[1] if '] ' in event else event
+                                action_log_struct.append({"t": relative_time, "event": event_desc})
+                            except:
+                                pass
                         
                         # 💡 确保所有细化标签完整落库
                         row = {
@@ -534,11 +585,19 @@ elif st.session_state.step == "experiment":
                             "action_log": " -> ".join(st.session_state[f"action_log_{idx}"]),
                             #"action_log_list": st.session_state[f"action_log_{idx}"],
                             "action_log_list": json.dumps(st.session_state[f"action_log_{idx}"]),
+                            "action_log_struct": json.dumps(action_log_struct),
                             "interaction_order": interaction_order,              # 带时间
                             "interaction_order_simple": interaction_order_simple, # 纯顺序
                             "interaction_order_clean": interaction_order_clean,  # ⭐ 仅决策前的交互
+                            "interaction_order_pre": interaction_order_pre,      # ⭐ 标准研究变量：决策前
+                            "interaction_order_full": interaction_order_full,    # ⭐ 标准研究变量：全生命周期
                             "post_decision_info": post_decision_info,            # ⭐ 是否决策后查看信息
+                            "post_decision_info_strict": post_decision_info_strict, # ⭐ robustness check
                             "post_decision_info_delay_s": post_decision_info_delay_s,  # ⭐ 决策→查看延迟
+                            "stabilization_time": stabilization_time,            # ⭐ 决策稳定时间
+                            "decision_commit_time": decision_commit_time,        # ⭐ 首次选择时间
+                            "pre_commit_events": pre_commit_events_str,          # ⭐ 承诺前事件
+                            "post_commit_events": post_commit_events_str,        # ⭐ 承诺后事件
                             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                         }
