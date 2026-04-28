@@ -446,6 +446,54 @@ elif st.session_state.step == "experiment":
 
                         is_expert_match = 1 if current_dept in expert_list else 0
 
+                        # ⭐⭐⭐ 新增：计算决策时间和行为分类 ⭐⭐⭐
+                        # 从 action_log 中提取决策时间（找第一个"选:"事件）
+                        decision_made_time = None
+                        action_log_list = st.session_state[f"action_log_{idx}"]
+                        for event in action_log_list:
+                            if '选:' in event:
+                                # 从 "[158.1s] 选:批准" 中解析时间
+                                try:
+                                    time_str = event.split(']')[0].replace('[', '').replace('s', '')
+                                    decision_made_time = float(time_str)
+                                except:
+                                    decision_made_time = None
+                                break
+                        
+                        # 🧩 计算 1：interaction_order_clean（仅决策前的交互序列）
+                        pre_decision_behaviors = []
+                        for event in action_log_list:
+                            try:
+                                event_time = float(event.split(']')[0].replace('[', '').replace('s', ''))
+                            except:
+                                continue
+                            
+                            # 只取决策前的事件
+                            if decision_made_time and event_time >= decision_made_time:
+                                continue
+                            
+                            if '呼叫AI' in event:
+                                if 'AI' not in pre_decision_behaviors:
+                                    pre_decision_behaviors.append('AI')
+                            elif '撰写理由' in event or '开始撰写' in event:
+                                if 'Reason' not in pre_decision_behaviors:
+                                    pre_decision_behaviors.append('Reason')
+                            elif '查阅底牌' in event or '查阅' in event:
+                                if 'Info' not in pre_decision_behaviors:
+                                    pre_decision_behaviors.append('Info')
+                        
+                        interaction_order_clean = ' → '.join(pre_decision_behaviors) if pre_decision_behaviors else 'N/A'
+                        
+                        # 🧩 计算 2：post_decision_info（是否在决策后查看信息）
+                        post_decision_info = 0
+                        if decision_made_time and v_time:
+                            if v_time > decision_made_time:
+                                post_decision_info = 1
+                        
+                        # 🧩 计算 3：post_decision_info_delay_s（决策到查看的延迟）
+                        post_decision_info_delay_s = None
+                        if post_decision_info == 1 and decision_made_time and v_time:
+                            post_decision_info_delay_s = round(v_time - decision_made_time, 2)
 
                         st.session_state[f"action_log_{idx}"].append(f"[{round(total_reaction_time,1)}s] 提交")
                         final_log_str = " -> ".join(st.session_state[f"action_log_{idx}"])
@@ -488,6 +536,9 @@ elif st.session_state.step == "experiment":
                             "action_log_list": json.dumps(st.session_state[f"action_log_{idx}"]),
                             "interaction_order": interaction_order,              # 带时间
                             "interaction_order_simple": interaction_order_simple, # 纯顺序
+                            "interaction_order_clean": interaction_order_clean,  # ⭐ 仅决策前的交互
+                            "post_decision_info": post_decision_info,            # ⭐ 是否决策后查看信息
+                            "post_decision_info_delay_s": post_decision_info_delay_s,  # ⭐ 决策→查看延迟
                             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                         }
