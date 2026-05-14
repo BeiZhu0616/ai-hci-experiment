@@ -216,18 +216,16 @@ def render_consent_page():
 def render_intro_page():
     st.title("🛡️ 早期项目初筛 (Teaser Review) 沙盘")
     
-    st.info("""
-    **【🌍 沙盘核心规则说明】**\n
-    欢迎参与本次商业决策演练！本研究旨在评估人类在面对“Agentic-AI”进行早期项目研判时的交互模式。\n
-    st.markdown(
-        '<p style="color:red; font-weight:bold;">⚠️ 请一次性做完，不要中途离开</p>',
-        unsafe_allow_html=True
-    )
-
-    * 💼 **您的角色：** 投资决策委员会成员。
-    * 🎯 **沙盘情境：** 快速初筛海外项目摘要。借助 AI 助手，在极短时间内识别致命风险。
-    * ⏱️ **决策方式：** 决定是将项目**【批准推进】**还是**【直接否决 (Pass)】**。
-    """)
+    st.markdown("""
+    <div style="background-color:#eef6ff; padding:16px; border-radius:10px;">
+    <b>【🌍 沙盘核心规则说明】</b><br><br>
+    欢迎参与本次商业决策演练！本研究旨在评估人类在面对“Agentic-AI”进行早期项目研判时的交互模式，
+    <b style="color:red;">请一次性做完，不要中途离开</b>。<br><br>
+    • 💼 您的角色：投资决策委员会成员。<br>
+    • 🎯 沙盘情境：快速初筛海外项目摘要。<br>
+    • ⏱️ 决策方式：批准或否决项目。
+    </div>
+    """, unsafe_allow_html=True)
 
     if st.button("我已阅读并了解规则，进入身份登记", type="primary", use_container_width=True, key="enter_registration"):
         st.session_state.step = "login"
