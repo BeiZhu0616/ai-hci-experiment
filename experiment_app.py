@@ -214,9 +214,6 @@ def render_consent_page():
 
 
 def render_intro_page():
-    if 'intro_start_time' not in st.session_state:
-        st.session_state.intro_start_time = time.time()
-        
     st.title("🛡️ 早期项目初筛 (Teaser Review) 沙盘")
     
     st.info("""
@@ -226,22 +223,8 @@ def render_intro_page():
     * 🎯 **沙盘情境：** 快速初筛海外项目摘要。借助 AI 助手，在极短时间内识别致命风险。
     * ⏱️ **决策方式：** 决定是将项目**【批准推进】**还是**【直接否决 (Pass)】**。
     """)
-    
-    elapsed_intro = time.time() - st.session_state.intro_start_time
-    wait_time = 3
 
-    if elapsed_intro < wait_time:
-        remaining = int(wait_time - elapsed_intro + 1)
-        st.button(
-            f"请阅读规则 ({remaining}s)",
-            disabled=True,
-            use_container_width=True,
-            key="intro_wait_button"
-        )
-        st.caption("请稍候片刻后刷新页面或等待按钮变为可点击。")
-        return
-
-    if st.button("我已了解，进入身份登记", type="primary", use_container_width=True, key="enter_registration"):
+    if st.button("我已阅读并了解规则，进入身份登记", type="primary", use_container_width=True, key="enter_registration"):
         st.session_state.step = "login"
         st.rerun()
 
