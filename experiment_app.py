@@ -395,6 +395,7 @@ elif st.session_state.step == "experiment":
             st.session_state[f"validation_block_count_{idx}"] = 0
             st.session_state[f"action_log_{idx}"] = []
             st.session_state[f"final_decision_{idx}"] = None  # ⭐ 锁定用户真实决策
+            st.session_state[f"final_confidence_{idx}"] = None
             st.session_state[f"tracker_init_{idx}"] = True
             
         with st.container(border=True):
@@ -468,7 +469,24 @@ elif st.session_state.step == "experiment":
                     
                     if st.session_state.get(f"rationale_locked_{idx}", False):
                         st.success("✅ 依据校验通过，请执行决策：")
-                        current_decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
+                        decision_options = ["(请选择)", "批准项目", "否决项目"]
+                        saved_decision = st.session_state.get(f"final_decision_{idx}")
+                        default_decision_index = (
+                            decision_options.index(saved_decision)
+                            if saved_decision in decision_options
+                            else 0
+                        )
+                        radio_key = f"radio_{idx}"
+                        if saved_decision in decision_options and st.session_state.get(radio_key, "(请选择)") == "(请选择)":
+                            st.session_state[radio_key] = saved_decision
+
+                        current_decision = st.radio(
+                            "请选择：",
+                            decision_options,
+                            index=default_decision_index,
+                            key=radio_key,
+                            horizontal=True
+                        )
                         
                         # ⭐ 关键改动：锁定用户已选决策（只要选过一次就记住）
                         if current_decision != "(请选择)":
@@ -476,7 +494,24 @@ elif st.session_state.step == "experiment":
                 
                 # 💨 对照组：直接点选
                 else:
-                    current_decision = st.radio("请选择：", ["(请选择)", "批准项目", "否决项目"], key=f"radio_{idx}", horizontal=True)
+                    decision_options = ["(请选择)", "批准项目", "否决项目"]
+                    saved_decision = st.session_state.get(f"final_decision_{idx}")
+                    default_decision_index = (
+                        decision_options.index(saved_decision)
+                        if saved_decision in decision_options
+                        else 0
+                    )
+                    radio_key = f"radio_{idx}"
+                    if saved_decision in decision_options and st.session_state.get(radio_key, "(请选择)") == "(请选择)":
+                        st.session_state[radio_key] = saved_decision
+
+                    current_decision = st.radio(
+                        "请选择：",
+                        decision_options,
+                        index=default_decision_index,
+                        key=radio_key,
+                        horizontal=True
+                    )
                     rationale = "N/A (Control)"
                     
                     if current_decision != "(请选择)" and st.session_state[f"first_rationale_input_time_{idx}"] is None:
@@ -506,20 +541,36 @@ elif st.session_state.step == "experiment":
                 
                 # ⭐ 改动：用"锁定值"控制提交按钮显示（不受 rerun 影响）
                 if final_decision:
+                    confidence_options = ["请选择", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                    saved_confidence = st.session_state.get(f"final_confidence_{idx}")
+                    default_conf_index = (
+                        confidence_options.index(saved_confidence)
+                        if saved_confidence in confidence_options
+                        else 0
+                    )
+                    conf_key = f"conf_{idx}"
+                    if saved_confidence in confidence_options and st.session_state.get(conf_key, "请选择") == "请选择":
+                        st.session_state[conf_key] = saved_confidence
+
                     conf_choice = st.radio(
                         "决策信心评分 (1-10):",
-                        ["请选择", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                        index=0,
+                        confidence_options,
+                        index=default_conf_index,
                         horizontal=True,
-                        key=f"conf_{idx}"
+                        key=conf_key
                     )
 
-                    if conf_choice == "请选择":
+                    if conf_choice != "请选择":
+                        st.session_state[f"final_confidence_{idx}"] = int(conf_choice)
+
+                    final_confidence = st.session_state.get(f"final_confidence_{idx}")
+
+                    if final_confidence is None:
                         st.warning("请先选择您的决策信心评分。")
                     else:
-                        conf = int(conf_choice)
+                        conf = int(final_confidence)
                     
-                    if conf_choice != "请选择" and st.button("提交决策并继续", type="primary", key=f"submit_decision_{idx}"):
+                    if final_confidence is not None and st.button("提交决策并继续", type="primary", key=f"submit_decision_{idx}"):
                         final_time = time.time()
                         # --- 🟢 核心逻辑插入点：在提交瞬时计算时序标签 ---
                         v_time = st.session_state.get(f"first_view_data_time_{idx}")
