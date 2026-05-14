@@ -430,7 +430,7 @@ elif st.session_state.step == "experiment":
 
                         st.rerun()
                 else:
-                    st.success("**✅ 底层尽调参数已调取：**")
+                    st.success("**✅ 补充信息已显示：**")
                     with st.container(border=True):
                         st.markdown(p['raw_data'])
 
