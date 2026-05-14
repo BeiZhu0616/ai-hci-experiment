@@ -228,14 +228,22 @@ def render_intro_page():
     """)
     
     elapsed_intro = time.time() - st.session_state.intro_start_time
-    if elapsed_intro < 3:
-        st.button(f"请阅读规则 ({int(4 - elapsed_intro)}s)", disabled=True, use_container_width=True)
-        time.sleep(1) 
+    wait_time = 3
+
+    if elapsed_intro < wait_time:
+        remaining = int(wait_time - elapsed_intro + 1)
+        st.button(
+            f"请阅读规则 ({remaining}s)",
+            disabled=True,
+            use_container_width=True,
+            key="intro_wait_button"
+        )
+        st.caption("请稍候片刻后刷新页面或等待按钮变为可点击。")
+        return
+
+    if st.button("我已了解，进入身份登记", type="primary", use_container_width=True, key="enter_registration"):
+        st.session_state.step = "login"
         st.rerun()
-    else:
-        if st.button("我已了解，进入身份登记", type="primary", use_container_width=True, key="enter_registration"):
-            st.session_state.step = "login"
-            st.rerun()
 
 
 # --- 3. 步骤 0：知情同意页 ---
