@@ -311,6 +311,7 @@ elif st.session_state.step == "login":
         if st.form_submit_button("保存档案并进入沙盘", type="primary"):
             # 自动补全代号逻辑
             final_u_id = u_id.strip() if u_id.strip() else f"EMP-{str(uuid.uuid4())[:4].upper()}"
+            session_id = str(uuid.uuid4())
             
             # 手填部分的防乱填校验
             is_valid, error_msg = check_demographics(organization, department)
@@ -319,7 +320,8 @@ elif st.session_state.step == "login":
                 st.error(f"⚠️ 信息填写不规范：{error_msg}")
             else:
                 st.session_state.user_data = {
-                    "id": u_id if u_id else "Anonymous", 
+                    "id": final_u_id,
+                    "session_id": session_id,
                     "organization": organization,
                     "department": department,
                     "job_function": job_function,
@@ -710,6 +712,7 @@ elif st.session_state.step == "experiment":
                         # 💡 确保所有细化标签完整落库
                         row = {
                             "subject_id": st.session_state.user_data['id'],
+                            "session_id": st.session_state.user_data["session_id"],
                             "experiment_group": st.session_state.user_data['group'],
                             "organization": st.session_state.user_data['organization'],
                             "department": st.session_state.user_data['department'],
