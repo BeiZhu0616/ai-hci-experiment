@@ -218,7 +218,12 @@ def render_intro_page():
     
     st.info("""
     **【🌍 沙盘核心规则说明】**\n
-    欢迎参与本次商业决策演练！本研究旨在评估人类在面对“Agentic-AI”进行早期项目研判时的交互模式，<strong style="color:red;">请一次性做完，不要中途离开</strong>。\n
+    欢迎参与本次商业决策演练！本研究旨在评估人类在面对“Agentic-AI”进行早期项目研判时的交互模式。\n
+    st.markdown(
+        '<p style="color:red; font-weight:bold;">⚠️ 请一次性做完，不要中途离开</p>',
+        unsafe_allow_html=True
+    )
+
     * 💼 **您的角色：** 投资决策委员会成员。
     * 🎯 **沙盘情境：** 快速初筛海外项目摘要。借助 AI 助手，在极短时间内识别致命风险。
     * ⏱️ **决策方式：** 决定是将项目**【批准推进】**还是**【直接否决 (Pass)】**。
