@@ -147,70 +147,50 @@ for key in ['step', 'current_idx', 'user_data', 'decisions', 'active_projects']:
 
 st.set_page_config(page_title="商业决策沙盘系统", page_icon="⚖️", layout="centered")
 
-# --- 3. 步骤 0：知情同意页 ---
-if st.session_state.step == "consent":
+
+def render_consent_page():
     st.title("在线商业决策实验")
 
-    st.markdown("""
-    <style>
-    .consent-card {
-        background-color: #f8f9fb;
-        padding: 22px 26px;
-        border-radius: 14px;
-        border: 1px solid #e5e7eb;
-        margin-bottom: 18px;
-    }
-    .consent-card-warning {
-        background-color: #fffdf7;
-        padding: 22px 26px;
-        border-radius: 14px;
-        border: 1px solid #f1e3b8;
-        margin-bottom: 18px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("一、研究介绍")
+        st.markdown("""
+        我们是来自西交利物浦大学产业家学院的研究团队。
 
-    st.markdown("""
-    <div class="consent-card">
-        <h3>一、研究介绍</h3>
-        <p>我们是来自西交利物浦大学产业家学院的研究团队。</p>
-        <p>本研究关注人在 AI 辅助商业决策场景中的判断过程。</p>
-        <p>本实验为模拟决策任务，没有标准答案，也不涉及绩效评价；请根据您的真实理解作答。</p>
-    </div>
-    """, unsafe_allow_html=True)
+        本研究关注人在 AI 辅助商业决策场景中的判断过程。
 
-    st.markdown("""
-    <div class="consent-card">
-        <h3>二、参与说明</h3>
-        <ul>
-            <li>预计用时：5–8 分钟</li>
-            <li>任务内容：阅读项目情境和 AI 建议，并做出决策</li>
-            <li>系统会记录交互行为，包括点击、停留时间和决策结果</li>
-            <li>本实验不收集姓名、手机号、邮箱、员工编号等可识别个人身份的信息</li>
-            <li>数据仅用于学术研究，并以汇总形式呈现</li>
-            <li>您可以在提交前退出；由于数据匿名化，提交后将无法撤回</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        本实验为模拟决策任务，没有标准答案，也不涉及绩效评价；请根据您的真实理解作答。
+        """)
 
-    st.markdown("""
-    <div class="consent-card-warning">
-        <h3>三、知情同意</h3>
-        <p>请阅读并确认以下内容后开始实验。</p>
-    </div>
-    """, unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("二、参与说明")
+        st.markdown("""
+        - 预计用时：5–8 分钟
+        - 任务内容：阅读项目情境和 AI 建议，并做出决策
+        - 系统会记录交互行为，包括点击、停留时间和决策结果
+        - 本实验不收集姓名、手机号、邮箱、员工编号等可识别个人身份的信息
+        - 数据仅用于学术研究，并以汇总形式呈现
+        - 您可以在提交前退出；由于数据匿名化，提交后将无法撤回
+        """)
 
-    consent_1 = st.checkbox("我已阅读并理解以上说明。")
-    consent_2 = st.checkbox("我确认自愿参与本实验。")
-    consent_3 = st.checkbox("我同意系统记录本次实验中的交互行为和决策数据。")
-    consent_4 = st.checkbox("我理解数据将匿名处理，提交后无法撤回。")
-    consent_5 = st.checkbox("我同意开始参与本次实验。")
+    with st.container(border=True):
+        st.subheader("三、知情同意")
+        st.markdown("请阅读并确认以下内容后开始实验。")
 
-    all_consented = all([consent_1, consent_2, consent_3, consent_4, consent_5])
+        consent_all = st.checkbox(
+            "我已阅读并理解以上说明，确认自愿参与本研究，并同意系统记录本次实验中的交互行为和决策数据。",
+            key="consent_all"
+        )
 
-    if st.button("开始实验", type="primary", use_container_width=True, disabled=not all_consented):
+    if st.button("开始实验", type="primary", use_container_width=True, disabled=not consent_all):
+        if "consent_all" in st.session_state:
+            del st.session_state["consent_all"]
         st.session_state.step = "intro"
         st.rerun()
+
+
+# --- 3. 步骤 0：知情同意页 ---
+if st.session_state.step == "consent":
+    render_consent_page()
 
 
 # --- 3. 步骤 1：第一页 (沙盘说明) ---
