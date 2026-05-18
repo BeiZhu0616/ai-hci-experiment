@@ -872,6 +872,9 @@ elif st.session_state.step == "survey":
                     
                     new_data = pd.DataFrame(st.session_state.decisions)
                     updated_df = pd.concat([existing_data, new_data], ignore_index=True)
+                    ordered_columns = list(new_data.columns)
+                    ordered_columns += [col for col in updated_df.columns if col not in ordered_columns]
+                    updated_df = updated_df.reindex(columns=ordered_columns)
                     
                     conn.update(worksheet="Sheet1", data=updated_df)
                 except Exception as e:
