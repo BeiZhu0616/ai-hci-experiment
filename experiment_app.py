@@ -5,7 +5,149 @@ import time
 import random
 import uuid
 import json
+import os
 from streamlit_gsheets import GSheetsConnection
+
+
+HEADERS = [
+    "subject_id",
+    "session_id",
+    "experiment_group",
+    "organization",
+    "organization_type",
+    "department",
+    "job_function",
+    "management_level",
+    "decision_role",
+    "academic_title",
+    "academic_field",
+    "experience_years",
+    "education",
+    "enterprise_type",
+    "gender",
+    "birth_year",
+    "ai_usage",
+    "knowledge_sinosure",
+    "project_id",
+    "round_id",
+    "decision",
+    "confidence",
+    "rationale",
+    "total_reaction_s",
+    "first_view_data_time",
+    "first_rationale_input_time",
+    "first_decision_time",
+    "pure_think_s",
+    "decision_change_count",
+    "validation_block_count",
+    "viewed_data",
+    "view_data_delay_s",
+    "action_log",
+    "action_log_raw",
+    "action_log_struct",
+    "interaction_order",
+    "interaction_order_clean",
+    "interaction_order_simple",
+    "interaction_order_full",
+    "interaction_order_time",
+    "post_decision_info",
+    "followed_ai",
+    "is_correct",
+    "final_decision_label",
+    "is_faulty_ai",
+    "timestamp",
+]
+
+
+def get_append_worksheet(conn, worksheet_name="Sheet1"):
+    client = getattr(conn, "client", None)
+    if client is not None and hasattr(client, "_select_worksheet"):
+        return client._select_worksheet(worksheet=worksheet_name)
+
+    instance = getattr(conn, "_instance", None)
+    if instance is not None and hasattr(instance, "_select_worksheet"):
+        return instance._select_worksheet(worksheet=worksheet_name)
+
+    if hasattr(conn, "worksheet"):
+        return conn.worksheet(worksheet_name)
+
+    raise RuntimeError("无法获取可 append 的 Google Sheets worksheet。请确认使用 service_account 模式。")
+
+
+def build_append_row(row):
+    decision_value = row.get("user_decision", "")
+    final_decision_label = row.get("final_decision_label", "")
+    if final_decision_label == "" and decision_value != "":
+        final_decision_label = "批准项目" if decision_value == 1 else "否决项目"
+
+    return {
+        "subject_id": row.get("subject_id", ""),
+        "session_id": row.get("session_id", ""),
+        "experiment_group": row.get("experiment_group", ""),
+        "organization": row.get("organization", ""),
+        "organization_type": row.get("organization_type", ""),
+        "department": row.get("department", ""),
+        "job_function": row.get("job_function", ""),
+        "management_level": row.get("management_level", ""),
+        "decision_role": row.get("decision_role", ""),
+        "academic_title": row.get("academic_title", ""),
+        "academic_field": row.get("academic_field", ""),
+        "experience_years": row.get("experience_years", ""),
+        "education": row.get("education", ""),
+        "enterprise_type": row.get("enterprise_type", ""),
+        "gender": row.get("gender", ""),
+        "birth_year": row.get("birth_year", ""),
+        "ai_usage": row.get("ai_usage", ""),
+        "knowledge_sinosure": row.get("knowledge_sinosure", ""),
+        "project_id": row.get("project_id", row.get("p_id", "")),
+        "round_id": row.get("round_id", row.get("display_order", "")),
+        "decision": row.get("decision", decision_value),
+        "confidence": row.get("confidence", ""),
+        "rationale": row.get("rationale", row.get("rationale_text", "")),
+        "total_reaction_s": row.get("total_reaction_s", ""),
+        "first_view_data_time": row.get("first_view_data_time", ""),
+        "first_rationale_input_time": row.get("first_rationale_input_time", ""),
+        "first_decision_time": row.get("first_decision_time", ""),
+        "pure_think_s": row.get("pure_think_s", ""),
+        "decision_change_count": row.get("decision_change_count", row.get("change_count", "")),
+        "validation_block_count": row.get("validation_block_count", row.get("block_count", "")),
+        "viewed_data": row.get("viewed_data", ""),
+        "view_data_delay_s": row.get("view_data_delay_s", row.get("post_decision_info_delay_s", "")),
+        "action_log": row.get("action_log", ""),
+        "action_log_raw": row.get("action_log_raw", row.get("action_log_list", "")),
+        "action_log_struct": row.get("action_log_struct", ""),
+        "interaction_order": row.get("interaction_order", ""),
+        "interaction_order_clean": row.get("interaction_order_clean", ""),
+        "interaction_order_simple": row.get("interaction_order_simple", ""),
+        "interaction_order_full": row.get("interaction_order_full", ""),
+        "interaction_order_time": row.get("interaction_order_time", row.get("interaction_order", "")),
+        "post_decision_info": row.get("post_decision_info", ""),
+        "followed_ai": row.get("followed_ai", ""),
+        "is_correct": row.get("is_correct", ""),
+        "final_decision_label": final_decision_label,
+        "is_faulty_ai": row.get("is_faulty_ai", ""),
+        "timestamp": row.get("timestamp", ""),
+    }
+
+
+def append_backup_csv(row):
+    backup_df = pd.DataFrame([row], columns=HEADERS)
+    backup_path = "backup_local_data.csv"
+
+    if not os.path.exists(backup_path):
+        backup_df.to_csv(
+            backup_path,
+            index=False,
+            encoding="utf-8-sig"
+        )
+    else:
+        backup_df.to_csv(
+            backup_path,
+            mode="a",
+            header=False,
+            index=False,
+            encoding="utf-8-sig"
+        )
 
 
 # --- 0. 防敷衍与防乱填校验函数 ---
@@ -915,13 +1057,17 @@ elif st.session_state.step == "survey":
 
         if st.form_submit_button("封存数据并查看真相", type="primary"):
             with st.spinner("正在安全连接数据库回传数据，请稍候..."):
+                write_success = False
                 try:
                     conn = st.connection("gsheets", type=GSheetsConnection)
-                    try:
-                        existing_data = conn.read(worksheet="Sheet1", ttl=0) 
-                        existing_data = existing_data.dropna(how="all")
-                    except:
-                        existing_data = pd.DataFrame()
+                    worksheet = get_append_worksheet(conn, "Sheet1")
+                    existing_values = worksheet.get_all_values()
+
+                    if len(existing_values) == 0:
+                        worksheet.append_row(
+                            HEADERS,
+                            value_input_option="USER_ENTERED"
+                        )
                         
                     for d in st.session_state.decisions:
                         d.update({
@@ -931,20 +1077,24 @@ elif st.session_state.step == "survey":
                             "knowledge_cbam": knowledge_map[know_p2_text], 
                             "feedback": feedback
                         })
-                    
-                    new_data = pd.DataFrame(st.session_state.decisions)
-                    updated_df = pd.concat([existing_data, new_data], ignore_index=True)
-                    ordered_columns = list(new_data.columns)
-                    ordered_columns += [col for col in updated_df.columns if col not in ordered_columns]
-                    updated_df = updated_df.reindex(columns=ordered_columns)
-                    
-                    conn.update(worksheet="Sheet1", data=updated_df)
+
+                        append_row = build_append_row(d)
+                        values = [append_row.get(col, "") for col in HEADERS]
+
+                        worksheet.append_row(
+                            values,
+                            value_input_option="USER_ENTERED"
+                        )
+                        append_backup_csv(append_row)
+
+                    write_success = True
                 except Exception as e:
-                    st.toast("数据同步可能出现延迟，但不影响您的实验进程。", icon="⚠️")
+                    st.error(f"Google Sheets 写入失败: {e}")
                     print(e)
             
-            st.session_state.step = "debrief"
-            st.rerun()
+            if write_success:
+                st.session_state.step = "debrief"
+                st.rerun()
 
 
 # --- 8. 步骤 6：真相告知 ---
